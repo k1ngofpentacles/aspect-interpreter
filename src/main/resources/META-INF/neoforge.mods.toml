@@ -1,0 +1,41 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "MIT"
+issueTrackerURL = "https://github.com/YOUR_GITHUB_NAME/aspect-interpreter/issues"
+
+[[mods]]
+modId = "aspect_interpreter"
+version = "1.2.0"
+displayName = "Aspect Interpreter"
+displayURL = "https://github.com/YOUR_GITHUB_NAME/aspect-interpreter"
+authors = "k1ngofpentacles"
+credits = "Built for Thaumaturge by Leclowndu93150 and contributors. Not affiliated with or endorsed by the Thaumaturge project."
+description = '''
+Gives Thaumaturge aspects to any item or entity that has none, by interpreting its name,
+material, recipes and mob category against the thematic patterns of the aspects already
+assigned in your pack. Real data-map entries and recipe-derived aspects always win.
+'''
+
+[[mixins]]
+config = "aspect_interpreter.mixins.json"
+
+[[dependencies.aspect_interpreter]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21.1,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.aspect_interpreter]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.1,1.22)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.aspect_interpreter]]
+modId = "thaumaturge"
+type = "required"
+versionRange = "[1.1,)"
+ordering = "AFTER"
+side = "BOTH"

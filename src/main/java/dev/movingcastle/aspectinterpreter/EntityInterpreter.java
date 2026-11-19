@@ -1,0 +1,153 @@
+package dev.movingcastle.aspectinterpreter;
+
+import com.leclowndu93150.thaumaturge.api.aspect.AspectDataMaps;
+import com.leclowndu93150.thaumaturge.api.aspect.AspectList;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobCategory;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
+
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+/**
+ * Fallback aspects for entity types with no entity_aspects entry.
+ *
+ * Thaumaturge's goggles overlay asks for entity aspects every frame, so {@link #guess} must never
+ * compute anything: it only reads a finished table. The table is filled by {@link #warmUp} — on the
+ * server thread at startup (well under a second for ~450 types), or on a background thread when a
+ * client joins a remote server. Until it is ready, lookups simply return nothing.
+ */
+public final class EntityInterpreter {
+    private EntityInterpreter() {}
+
+    private static final Map<EntityType<?>, AspectList> LISTS = new ConcurrentHashMap<>();
+    private static final Map<EntityType<?>, Map<String, Double>> GUESSES = new ConcurrentHashMap<>();
+    private static volatile HolderLookup.Provider listsFor;
+    private static volatile boolean ready;
+    private static final AtomicBoolean warming = new AtomicBoolean();
+    private static final String T = "thaumaturge:";
+
+    private static final Map<MobCategory, Map<String, Double>> CATEGORY = new EnumMap<>(MobCategory.class);
+
+    static {
+        CATEGORY.put(MobCategory.MONSTER, Map.of(T + "aversio", 0.6, T + "bestia", 0.4));
+        CATEGORY.put(MobCategory.CREATURE, Map.of(T + "bestia", 0.6, T + "victus", 0.4));
+        CATEGORY.put(MobCategory.AMBIENT, Map.of(T + "bestia", 0.5, T + "volatus", 0.3, T + "tenebrae", 0.2));
+        Map<String, Double> water = Map.of(T + "aqua", 0.5, T + "bestia", 0.4, T + "victus", 0.1);
+        for (MobCategory c : List.of(MobCategory.AXOLOTLS, MobCategory.WATER_CREATURE, MobCategory.WATER_AMBIENT, MobCategory.UNDERGROUND_WATER_CREATURE))
+            CATEGORY.put(c, water);
+    }
+
+    /** Called from the mixin, possibly every frame. Pure table lookup; returns null when there is nothing to add. */
+    public static AspectList guess(EntityType<?> type) {
+        if (!ready) {
+            warmUpAsync(); // e.g. after a data-map sync; never block the caller
+            return null;
+        }
+        HolderLookup.Provider provider = provider();
+        if (provider == null) return null;
+        if (provider != listsFor) { LISTS.clear(); listsFor = provider; }
+        AspectList cached = LISTS.get(type);
+        if (cached != null) return cached;
+        Map<String, Double> g = GUESSES.get(type);
+        if (g == null || g.isEmpty()) return null;
+        Map<String, Integer> ints = new LinkedHashMap<>();
+        g.forEach((a, x) -> ints.put(a, (int) Math.round(x)));
+        AspectList list = InterpreterContributor.build(ints, provider);
+        LISTS.put(type, list);
+        return list;
+    }
+
+    /** Fills the guess table for every entity type without real aspects. Blocking; call off the render thread. */
+    static void warmUp() {
+        if (!Config.get().entities) return;
+        Knowledge.rebuildIfStale();
+        Map<EntityType<?>, Map<String, Double>> fresh = new HashMap<>();
+        for (EntityType<?> type : BuiltInRegistries.ENTITY_TYPE) {
+            AspectList real = type.builtInRegistryHolder().getData(AspectDataMaps.ENTITY_ASPECTS);
+            if (real == null || real.isEmpty()) fresh.put(type, compute(type));
+        }
+        GUESSES.clear();
+        GUESSES.putAll(fresh);
+        LISTS.clear();
+        ready = true;
+    }
+
+    private static void warmUpAsync() {
+        if (!warming.compareAndSet(false, true)) return;
+        CompletableFuture.runAsync(() -> {
+            try { warmUp(); } catch (Throwable t) { AspectInterpreter.LOG.warn("Aspect Interpreter entity warm-up failed", t); }
+            finally { warming.set(false); }
+        });
+    }
+
+    /** The entity's real aspects if it has any, otherwise the interpreter's guess. Used for spawn eggs. */
+    static Map<String, Double> knownOrGuess(EntityType<?> type) {
+        AspectList real = type.builtInRegistryHolder().getData(AspectDataMaps.ENTITY_ASPECTS);
+        if (real != null && !real.isEmpty()) return Knowledge.toMap(real);
+        Map<String, Double> g = GUESSES.get(type);
+        return g != null ? g : compute(type);
+    }
+
+    static void invalidate() {
+        ready = false;
+        LISTS.clear();
+    }
+
+    private static Map<String, Double> compute(EntityType<?> type) {
+        Config cfg = Config.get();
+        ResourceLocation rl = EntityType.getKey(type);
+        String id = rl.toString();
+        if (cfg.excluded(id)) return Map.of();
+        List<Model.Source> extra = new ArrayList<>();
+        MobCategory cat = type.getCategory();
+        Map<String, Double> prior = CATEGORY.get(cat);
+        if (prior != null) extra.add(new Model.Source("category", prior, 0.7));
+        Double forcedTotal = null;
+        if (cat == MobCategory.MISC) {
+            // Boats, minecarts, arrows, projectiles: read them as the item they are (or resemble).
+            Model items = Knowledge.items();
+            if (items.knows(id)) {
+                extra.add(new Model.Source("item", items.known(id), 1.5));
+                forcedTotal = Model.total(items.known(id));
+            } else {
+                Model.Prediction asItem = items.predict(id, null, 8, null);
+                if (asItem != null && asItem.confidence() >= 0.3) {
+                    Map<String, Double> d = new HashMap<>();
+                    asItem.aspects().forEach((a, x) -> d.put(a, (double) x));
+                    extra.add(new Model.Source("item-like", d, asItem.confidence()));
+                    forcedTotal = Model.total(d);
+                }
+            }
+        } else if (type.fireImmune()) {
+            // Only living creatures: projectiles and body-part entities are fire-immune for technical reasons.
+            extra.add(new Model.Source("fireproof", Map.of(T + "ignis", 1.0), 0.2));
+        }
+        double size = Math.cbrt(Math.max(0.01, type.getWidth() * type.getWidth() * type.getHeight()));
+        double fallback = 25 * Math.max(0.4, Math.min(2.0, size / 0.9));
+        Model.Prediction p = Knowledge.entities().predict(id, extra, fallback, forcedTotal);
+        if (p == null || p.confidence() < cfg.minConfidence) {
+            AssignmentLog.entity(id, null, p == null ? 0 : p.confidence(), p == null ? "no evidence" : "below min_confidence");
+            return Map.of();
+        }
+        AssignmentLog.entity(id, p.aspects(), p.confidence(), p.basis());
+        Map<String, Double> out = new LinkedHashMap<>();
+        p.aspects().forEach((a, x) -> out.put(a, (double) x));
+        return out;
+    }
+
+    private static HolderLookup.Provider provider() {
+        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+        if (server != null) return server.registryAccess();
+        if (FMLEnvironment.dist == Dist.CLIENT) return ClientAccess.registries();
+        return null;
+    }
+}

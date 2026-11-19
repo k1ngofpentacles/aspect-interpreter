@@ -1,0 +1,19 @@
+# Gradle
+.gradle/
+build/
+out/
+run/
+runs/
+# IDEs
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+bin/
+# Third-party jars you compile against locally. Never commit these: they are not ours to redistribute.
+libs/*.jar
+# OS
+.DS_Store
+Thumbs.db
