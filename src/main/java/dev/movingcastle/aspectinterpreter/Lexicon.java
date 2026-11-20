@@ -21,6 +21,12 @@ final class Lexicon {
     final Set<String> neutral = new HashSet<>();
     final Map<String, String> meanings = new LinkedHashMap<>();
     final Map<String, Map<String, Double>> dimensions = new HashMap<>();
+    // crafting-complexity layer
+    final Set<String> formWords = new HashSet<>();
+    final List<String> machineTypes = new ArrayList<>();
+    final List<String> noCraftTypes = new ArrayList<>();
+    final Map<String, String> craftAspects = new HashMap<>();
+    double craftPerStep = 0.06, craftMaxShare = 0.3;
     private volatile Map<String, Double> calibration = Map.of();
 
     static Lexicon load() {
@@ -28,6 +34,15 @@ final class Lexicon {
         try (InputStream in = Lexicon.class.getResourceAsStream("/data/aspect_interpreter/lexicon.json")) {
             JsonObject root = JsonParser.parseReader(new InputStreamReader(Objects.requireNonNull(in), StandardCharsets.UTF_8)).getAsJsonObject();
             for (JsonElement e : root.getAsJsonArray("neutral")) lex.neutral.add(Tokens.norm(e.getAsString()));
+            JsonObject craft = root.getAsJsonObject("craftsmanship");
+            if (craft != null) {
+                craft.getAsJsonObject("aspects").entrySet().forEach(x -> lex.craftAspects.put(x.getKey(), x.getValue().getAsString()));
+                for (JsonElement w : craft.getAsJsonArray("form_words")) lex.formWords.add(Tokens.norm(w.getAsString()));
+                for (JsonElement w : craft.getAsJsonArray("machine_recipe_types")) lex.machineTypes.add(w.getAsString());
+                for (JsonElement w : craft.getAsJsonArray("no_craft_recipe_types")) lex.noCraftTypes.add(w.getAsString());
+                if (craft.has("per_step")) lex.craftPerStep = craft.get("per_step").getAsDouble();
+                if (craft.has("max_share")) lex.craftMaxShare = craft.get("max_share").getAsDouble();
+            }
             JsonObject dims = root.getAsJsonObject("dimensions");
             if (dims != null) for (Map.Entry<String, JsonElement> d : dims.entrySet()) {
                 if (!d.getValue().isJsonObject()) continue;
@@ -77,6 +92,14 @@ final class Lexicon {
             }
         }
         return out;
+    }
+
+    /** Matches a recipe type id against patterns like "create:*" or "minecraft:smelting". */
+    static boolean matchesType(List<String> patterns, String typeId) {
+        for (String p : patterns) {
+            if (p.endsWith(":*") ? typeId.startsWith(p.substring(0, p.length() - 1)) : p.equals(typeId)) return true;
+        }
+        return false;
     }
 
     Map<String, Double> dimensionPrior(String dim) {

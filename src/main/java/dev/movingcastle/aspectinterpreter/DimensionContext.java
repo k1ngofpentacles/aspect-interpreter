@@ -53,6 +53,8 @@ final class DimensionContext {
     private static volatile Map<String, Map<String, Double>> itemDims = Map.of();
     private static volatile Map<String, Map<String, Double>> entityDims = Map.of();
     private static volatile Map<String, LinkedHashMap<String, Double>> signatures = Map.of();
+    /** The aspect a native object is guaranteed: the defining prior aspect if the pack has it, else the learned lead. */
+    private static volatile Map<String, String> leads = Map.of();
     private static volatile boolean computed;
 
     static boolean computed() { return computed; }
@@ -80,9 +82,8 @@ final class DimensionContext {
         if (!Config.get().dimensionContext || aspects.isEmpty()) return;
         for (Map.Entry<String, Double> d : dims(id, entity).entrySet()) {
             if (d.getValue() < NATIVE_SHARE) continue;
-            LinkedHashMap<String, Double> sig = signatures.get(d.getKey());
-            if (sig == null || sig.isEmpty()) continue;
-            String lead = sig.keySet().iterator().next();
+            String lead = leads.get(d.getKey());
+            if (lead == null) continue;
             if (aspects.containsKey(lead)) return;
             int total = 0;
             for (int x : aspects.values()) total += x;
@@ -187,16 +188,19 @@ final class DimensionContext {
 
         itemDims = normalise(items);
         entityDims = entShares;
-        signatures = learnSignatures(new TreeSet<>(itemDims.values().stream().flatMap(m -> m.keySet().stream()).toList()), access);
+        Map<String, String> newLeads = new HashMap<>();
+        signatures = learnSignatures(new TreeSet<>(itemDims.values().stream().flatMap(m -> m.keySet().stream()).toList()), access, newLeads);
+        leads = newLeads;
         computed = true;
         StringJoiner sj = new StringJoiner("; ");
-        signatures.forEach((d, s) -> sj.add(d + " -> " + String.join("/", s.keySet().stream().map(a -> a.replace("thaumaturge:", "")).toList())));
+        signatures.forEach((d, s) -> sj.add(d + " -> " + String.join("/", s.keySet().stream().map(a -> a.replace("thaumaturge:", "")).toList())
+                + " (guaranteed: " + leads.getOrDefault(d, "-").replace("thaumaturge:", "") + ")"));
         AspectInterpreter.LOG.info("Aspect Interpreter dimension context: {} items and {} entities placed in {} ms. Signatures: {}",
                 itemDims.size(), entityDims.size(), (System.nanoTime() - t0) / 1_000_000, sj.length() == 0 ? "none" : sj);
     }
 
     /** Learned over-represented aspects per dimension, blended with the lexicon's prior, limited to aspects the pack has. */
-    private static Map<String, LinkedHashMap<String, Double>> learnSignatures(Set<String> dims, RegistryAccess access) {
+    private static Map<String, LinkedHashMap<String, Double>> learnSignatures(Set<String> dims, RegistryAccess access, Map<String, String> leadsOut) {
         Config cfg = Config.get();
         Model items = Knowledge.items(), ents = Knowledge.entities();
         Set<String> available = new HashSet<>();
@@ -246,7 +250,21 @@ final class DimensionContext {
                 if (sig.size() >= 2 || e.getValue() < 0.25 * ranked.get(0).getValue()) break;
                 sig.put(e.getKey(), e.getValue());
             }
-            if (!sig.isEmpty()) out.put(dim, sig);
+            // Defining aspects (weight 1.0 in the lexicon's prior) always belong, when the pack has them:
+            // e.g. infernum for the Nether once Thaumic Additions is installed, alienis for the End.
+            String defining = null;
+            if (override == null) {
+                double top = ranked.isEmpty() ? 1.0 : ranked.get(0).getValue();
+                for (Map.Entry<String, Double> e : Knowledge.LEXICON.dimensionPrior(dim).entrySet()) {
+                    if (e.getValue() < 1.0 || !available.contains(e.getKey())) continue;
+                    if (defining == null) defining = e.getKey();
+                    sig.putIfAbsent(e.getKey(), Math.max(blended.getOrDefault(e.getKey(), 0.0), 0.5 * top));
+                }
+            }
+            if (!sig.isEmpty()) {
+                out.put(dim, sig);
+                leadsOut.put(dim, defining != null ? defining : sig.keySet().iterator().next());
+            }
         }
         return out;
     }

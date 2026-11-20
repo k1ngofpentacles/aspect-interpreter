@@ -40,8 +40,16 @@ final class AssignmentLog {
             out.add("");
             out.add("## Items (" + ITEMS.size() + ")");
             ITEMS.forEach((k, v) -> out.add(k + " | " + v));
+            Map<String, Map<String, Integer>> craft = CraftComplexity.added();
             out.add("");
-            out.add("## Entities guessed so far (" + ENTITIES.size() + "; entities are interpreted when first scanned)");
+            out.add("## Craftsmanship added to recipe-derived items (" + craft.size() + ")");
+            craft.forEach((k, v) -> {
+                StringJoiner j = new StringJoiner(" ");
+                v.forEach((a, x) -> j.add("+" + a.replace("thaumaturge:", "") + " " + x));
+                out.add(k + " | " + j);
+            });
+            out.add("");
+            out.add("## Entities (" + ENTITIES.size() + ")");
             ENTITIES.forEach((k, v) -> out.add(k + " | " + v));
             Files.write(dir.resolve("assignments.txt"), out, StandardCharsets.UTF_8);
         } catch (Exception e) {

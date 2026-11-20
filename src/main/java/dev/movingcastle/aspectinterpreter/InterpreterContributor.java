@@ -42,6 +42,7 @@ final class InterpreterContributor implements IAspectRecipeContributor {
     public void beginBuild(RecipeManager recipes, HolderLookup.Provider registries) {
         long t0 = System.nanoTime();
         Knowledge.rebuildIfStale();
+        CraftComplexity.prepare(recipes, registries);
         if (!DimensionContext.computed()) DimensionContext.compute(net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer());
         AssignmentLog.clearItems();
         byOutput.clear();
@@ -69,8 +70,8 @@ final class InterpreterContributor implements IAspectRecipeContributor {
     static void finishBuildIfDone() {
         if (!building) return;
         building = false;
-        AspectInterpreter.LOG.info("Aspect Interpreter: filled {} of {} unresolved items, {} ms total inside Thaumaturge's index build",
-                filled, asked, buildNanos / 1_000_000);
+        AspectInterpreter.LOG.info("Aspect Interpreter: filled {} of {} unresolved items and added craftsmanship to {} recipe-derived items, {} ms of our own work inside Thaumaturge's index build",
+                filled, asked, CraftComplexity.added().size(), buildNanos / 1_000_000);
         InterpretedIds.save(FILLED);
         AspectInterpreter.recordBuild(Knowledge.learnedFromCache > 0);
         AssignmentLog.write();
@@ -154,7 +155,10 @@ final class InterpreterContributor implements IAspectRecipeContributor {
             if (forcedTotal == null) forcedTotal = 10.0;
         }
         Model.Prediction p = Knowledge.items().predict(id, extra, 8, forcedTotal);
-        if (p != null) DimensionContext.ensureNative(p.aspects(), id, false);
+        if (p != null) {
+            DimensionContext.ensureNative(p.aspects(), id, false);
+            CraftComplexity.enrich(item, p.aspects());
+        }
         return p;
     }
 

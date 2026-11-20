@@ -2713,7 +2713,7 @@
   "on"
  ],
  "dimensions": {
-  "_doc": "Prior meaning of known dimensions, blended with what is learned from objects native to each. Unlisted dimensions fall back to matching their name against the words above.",
+  "_doc": "Prior meaning of known dimensions, blended with what is learned from objects native to each. An aspect with weight 1.0 is defining: it always joins the signature when the pack has it (e.g. infernum for the Nether once Thaumic Additions is installed), and native objects are guaranteed a point of it. Unlisted dimensions fall back to matching their name against the words above.",
   "minecraft:the_end": {
    "thaumaturge:alienis": 1.0,
    "thaumaturge:tenebrae": 0.5,
@@ -2743,5 +2743,70 @@
    "madmans_dreams:somnium": 1.0,
    "thaumaturge:alienis": 0.5
   }
+ },
+ "craftsmanship": {
+  "_doc": "Crafting-complexity layer. Each crafting step beyond the first refinement (log->planks, ore->ingot) adds craftsmanship of the step's kind: 'form' when the result is a regular architectural shape, 'machine' for machine processing, otherwise 'assembly'. Cooking and Thaumaturge's own magical recipes add none (Thaumaturge already adds heat and praecantatio).",
+  "aspects": {
+   "form": "thaumaturge:ordo",
+   "assembly": "thaumaturge:fabrico",
+   "machine": "thaumaturge:machina"
+  },
+  "form_words": [
+   "stair",
+   "slab",
+   "wall",
+   "fence",
+   "pillar",
+   "column",
+   "brick",
+   "tile",
+   "polished",
+   "chiseled",
+   "cut",
+   "smooth",
+   "pane",
+   "carpet",
+   "button",
+   "pressure",
+   "plate",
+   "door",
+   "trapdoor",
+   "gate",
+   "sign",
+   "path",
+   "paving",
+   "roof",
+   "panel",
+   "frame",
+   "bar",
+   "chain",
+   "beam",
+   "railing",
+   "balcony",
+   "shingle",
+   "step",
+   "post",
+   "arch",
+   "molding",
+   "trim"
+  ],
+  "machine_recipe_types": [
+   "create:*",
+   "createaddition:*",
+   "create_thaumaturgy:*",
+   "forestry:*",
+   "immersiveengineering:*",
+   "mekanism:*",
+   "thermal:*"
+  ],
+  "no_craft_recipe_types": [
+   "minecraft:smelting",
+   "minecraft:blasting",
+   "minecraft:smoking",
+   "minecraft:campfire_cooking",
+   "thaumaturge:*"
+  ],
+  "per_step": 0.06,
+  "max_share": 0.3
  }
 }

@@ -33,10 +33,13 @@ public final class EntityInterpreter {
     private static final String T = "thaumaturge:";
 
     private static final Map<MobCategory, Map<String, Double>> CATEGORY = new EnumMap<>(MobCategory.class);
+    /** Category profiles learned from the pack's own entity_aspects entries; blended with the fallback above. */
+    private static volatile Map<MobCategory, Map<String, Double>> learnedCategory = Map.of();
 
     static {
         CATEGORY.put(MobCategory.MONSTER, Map.of(T + "aversio", 0.6, T + "bestia", 0.4));
-        CATEGORY.put(MobCategory.CREATURE, Map.of(T + "bestia", 0.6, T + "victus", 0.4));
+        // Thaumaturge gives land animals their habitat element (a cow is bestia 15 + terra 15), rarely victus.
+        CATEGORY.put(MobCategory.CREATURE, Map.of(T + "bestia", 0.6, T + "terra", 0.4));
         CATEGORY.put(MobCategory.AMBIENT, Map.of(T + "bestia", 0.5, T + "volatus", 0.3, T + "tenebrae", 0.2));
         Map<String, Double> water = Map.of(T + "aqua", 0.5, T + "bestia", 0.4, T + "victus", 0.1);
         for (MobCategory c : List.of(MobCategory.AXOLOTLS, MobCategory.WATER_CREATURE, MobCategory.WATER_AMBIENT, MobCategory.UNDERGROUND_WATER_CREATURE))
@@ -64,6 +67,7 @@ public final class EntityInterpreter {
     static void warmUp() {
         if (!Config.get().entities) return;
         Knowledge.rebuildIfStale();
+        learnCategories();
         Map<EntityType<?>, Map<String, Double>> fresh = new HashMap<>();
         for (EntityType<?> type : BuiltInRegistries.ENTITY_TYPE) {
             AspectList real = type.builtInRegistryHolder().getData(AspectDataMaps.ENTITY_ASPECTS);
@@ -73,6 +77,42 @@ public final class EntityInterpreter {
         GUESSES.putAll(fresh);
         LISTS.clear();
         ready = true;
+    }
+
+    /** Mean aspect profile per mob category over entities that have real entity_aspects, top 3 aspects. */
+    private static void learnCategories() {
+        Map<MobCategory, Map<String, Double>> sums = new EnumMap<>(MobCategory.class);
+        Map<MobCategory, Integer> counts = new EnumMap<>(MobCategory.class);
+        Map<MobCategory, Map<String, Integer>> presence = new EnumMap<>(MobCategory.class);
+        for (EntityType<?> type : BuiltInRegistries.ENTITY_TYPE) {
+            AspectList real = type.builtInRegistryHolder().getData(AspectDataMaps.ENTITY_ASPECTS);
+            if (real == null || real.isEmpty()) continue;
+            Map<String, Double> v = Model.normalise(Knowledge.toMap(real));
+            Map<String, Double> sum = sums.computeIfAbsent(type.getCategory(), k -> new HashMap<>());
+            v.forEach((a, x) -> sum.merge(a, x, Double::sum));
+            Map<String, Integer> pres = presence.computeIfAbsent(type.getCategory(), k -> new HashMap<>());
+            v.keySet().forEach(a -> pres.merge(a, 1, Integer::sum));
+            counts.merge(type.getCategory(), 1, Integer::sum);
+        }
+        Map<MobCategory, Map<String, Double>> out = new EnumMap<>(MobCategory.class);
+        sums.forEach((cat, sum) -> {
+            int n = counts.get(cat);
+            List<Map.Entry<String, Double>> top = new ArrayList<>(sum.entrySet());
+            top.sort((a, b) -> Double.compare(b.getValue(), a.getValue()));
+            Map<String, Double> learned = new HashMap<>();
+            // keep only what most members share (a category of zombies and spiders shares little)
+            for (int i = 0; i < Math.min(3, top.size()); i++) {
+                String a = top.get(i).getKey();
+                if (presence.get(cat).getOrDefault(a, 0) >= 0.4 * n) learned.put(a, top.get(i).getValue() / n);
+            }
+            if (learned.isEmpty()) { out.put(cat, CATEGORY.getOrDefault(cat, Map.of())); return; }
+            double conf = n / (n + 5.0);
+            Map<String, Double> blended = new HashMap<>();
+            Model.normalise(learned).forEach((a, x) -> blended.merge(a, conf * x, Double::sum));
+            Model.normalise(CATEGORY.getOrDefault(cat, Map.of())).forEach((a, x) -> blended.merge(a, (1 - conf) * x, Double::sum));
+            out.put(cat, blended);
+        });
+        learnedCategory = out;
     }
 
     /** The server's finished table, as sent to clients. */
@@ -124,8 +164,8 @@ public final class EntityInterpreter {
         if (cfg.excluded(id)) return Map.of();
         List<Model.Source> extra = new ArrayList<>();
         MobCategory cat = type.getCategory();
-        Map<String, Double> prior = CATEGORY.get(cat);
-        if (prior != null) extra.add(new Model.Source("category", prior, 0.7));
+        Map<String, Double> prior = cat == MobCategory.MISC ? null : learnedCategory.getOrDefault(cat, CATEGORY.get(cat));
+        if (prior != null && !prior.isEmpty()) extra.add(new Model.Source("category", prior, 0.7));
         Double forcedTotal = null;
         if (cat == MobCategory.MISC) {
             // Boats, minecarts, arrows, projectiles: read them as the item they are (or resemble).

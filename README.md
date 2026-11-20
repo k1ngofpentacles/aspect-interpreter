@@ -2,7 +2,10 @@
 
 An add-on for [Thaumaturge](https://www.curseforge.com/projects/1628024) on NeoForge 1.21.1. It gives **aspects to every item and entity that has none**, by interpreting each object's name, material, recipes and mob category against the patterns of the aspects your pack already assigns.
 
-It never overrides anything. Items with real `base_aspects` entries, aspects Thaumaturge derives from recipes, and entities with `entity_aspects` entries are left exactly as they are. Aspect Interpreter only answers when Thaumaturge would otherwise have nothing.
+It never overrides anything hand-written: items with `base_aspects` entries and entities with `entity_aspects` entries are left exactly as they are. Everywhere else it does two things:
+
+- **Fills gaps:** it answers when Thaumaturge would otherwise have nothing.
+- **Adds craftsmanship:** Thaumaturge's recipe rule only conserves materials, so crafted items never gain aspects. Aspect Interpreter adds ordo, fabrico or machina for each extra crafting step, so stairs read as shaped wood rather than just wood.
 
 ## Requirements
 - Minecraft 1.21.1
@@ -23,9 +26,10 @@ The model reads what your pack already does and applies the same pattern to the 
 - **Word profiles:** the aspect mix the pack associates with each word in the name.
 - **Meaning:** a table of what each aspect means, with each word's weight calibrated against your pack's own assignments.
 - **Physical evidence:** recipes of any type, block material, food, tool or armour data, and mob category and size.
+- **How it was made:** each crafting step beyond the first refinement adds craftsmanship of its kind (ordo for regular forms, machina for machine work, fabrico for assembly).
 - **Where it comes from:** the dimension an object spawns, generates or drops in. Each dimension's character is learned from its already-assigned natives, so an End fish picks up a little alienis.
 
-[`docs/ALGORITHM.md`](docs/ALGORITHM.md) has the full method and measured accuracy. On held-out items from the author's pack, it picked the right main aspect about 73% of the time.
+[`docs/ALGORITHM.md`](docs/ALGORITHM.md) has the full method and measured accuracy. [`docs/PHILOSOPHY.md`](docs/PHILOSOPHY.md) explains how Thaumaturge and its add-ons assign aspects, and how each rule here follows from that. On held-out items from the author's pack, it picked the right main aspect about 73% of the time.
 
 ## Configuration
 The config file is `config/aspect_interpreter.json`:
@@ -34,6 +38,7 @@ The config file is `config/aspect_interpreter.json`:
 |---|---|---|
 | `items` / `entities` | `true` | Turn either half off |
 | `learnFromThaumaturgeCache` | `true` | Also learn from Thaumaturge's resolved index, excluding this mod's own guesses |
+| `craftingComplexity` | `true` | Add craftsmanship to recipe-derived items |
 | `dimensionContext` | `true` | Use the dimension an object comes from as evidence |
 | `baselineDimensions` | `["minecraft:overworld"]` | Dimensions with no special character |
 | `dimensionAspects` | `{}` | Pin a dimension's signature, e.g. `{"minecraft:the_end": {"thaumaturge:alienis": 1.0}}` |

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.0
+- **Crafting complexity.** Recipe-derived items, including Thaumaturge's own derivations, now gain craftsmanship for each step beyond the first refinement: ordo for regular forms, machina for machine processing, fabrico for assembly. Oak stairs go from herba 5 to herba 5 + ordo 1. Hand-written entries are never changed.
+- **Defining dimension aspects.** The Nether's signature includes infernum once Thaumic Additions is installed, and Nether natives are guaranteed a point of it. The End's defining aspect is alienis.
+- **Learned creature defaults.** Mob-category defaults are now learned from the pack's own entity data. The fallback for land creatures is bestia + terra, matching Thaumaturge (a cow is bestia + terra), instead of victus.
+- **Report:** `assignments.txt` lists every craftsmanship addition. The log counts them.
+- **New config option:** `craftingComplexity`.
+- **New doc:** `docs/PHILOSOPHY.md`, an analysis of how Thaumaturge and its add-ons assign aspects.
+
 ## 1.3.0
 - **Dimension context.** Objects now take on the character of the dimension they come from. It's read from what each dimension actually spawns, generates and drops, and from items named after those creatures. Cosmic cod and its bucket and spawn egg now carry alienis.
 - **Learned dimension signatures.** Each dimension's signature is learned from the aspects over-represented among its already-assigned natives, blended with a small lexicon prior. The End comes out alienis then tenebrae, the Nether ignis.

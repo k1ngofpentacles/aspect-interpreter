@@ -1,11 +1,14 @@
 # Aspect Interpreter: how it assigns aspects
 
-Aspect Interpreter is a NeoForge 1.21.1 add-on for Thaumaturge 1.1+. It gives aspects to any item or entity type that has none. It never overrides an existing entry.
+Aspect Interpreter is a NeoForge 1.21.1 add-on for Thaumaturge 1.1+. It gives aspects to any item or entity type that has none, and adds craftsmanship to recipe-derived items. It never changes hand-written (`base_aspects` / `entity_aspects`) entries.
+
+The reasoning behind each rule, drawn from Thaumaturge's own data, is in [`PHILOSOPHY.md`](PHILOSOPHY.md).
 
 ## Where it plugs in
 
-| Target | Hook | Why it is a pure fallback |
+| Target | Hook | What it changes |
 |---|---|---|
+| Recipe-derived items | Mixin on the return of Thaumaturge's `CraftingAspectContributor.derive` | Adds craftsmanship after Thaumaturge has derived an item from a crafting recipe. Optional: it turns itself off if Thaumaturge changes. |
 | Items | `IAspectRecipeContributor` registered through `RegisterAspectContributorsEvent` | Thaumaturge asks contributors in order and keeps the first non-empty answer. Event contributors run after its own crucible, infusion, crafting and cooking contributors, so this one is only asked about items with no base aspects and no recipe Thaumaturge could resolve. |
 | Entities | Mixin on the return of `EntityAspects.of(EntityType)` | Every entity read (scanning, goggles, wand charging, nodes, liquid death, infusion enchantments) goes through this method. The mixin only acts when it returns empty. |
 
@@ -43,9 +46,11 @@ A separate list of neutral words (colours, shapes, sizes) is ignored for meaning
 | Material (items) | Block sound type (wood, stone, metal, glass, wool...), light level, food, tool, attack damage, armour, fire resistance | up to 0.8 |
 | Creature (spawn eggs) | The entity's real or interpreted aspects, plus victus | 1.2 |
 | Dimension | The leading aspects of the dimension the object comes from (see below) | 0.5 × share of the object's association with that dimension |
-| Category (entities) | Monster → aversio/bestia; creature → bestia/victus; water → aqua/bestia; ambient → bestia/volatus/tenebrae; fire immunity adds a little ignis, for living creatures only; non-living entities (boats, minecarts, arrows, projectiles) are read as the item they are or most resemble | 0.7 (item match 1.5) |
+| Category (entities) | Learned from the pack's own `entity_aspects` per mob category (only aspects at least 40% of members share), falling back to monster → aversio/bestia; creature → bestia/terra; water → aqua/bestia; ambient → bestia/volatus/tenebrae; fire immunity adds a little ignis, for living creatures only; non-living entities (boats, minecarts, arrows, projectiles) are read as the item they are or most resemble | 0.7 (item match 1.5) |
 
-**2b. Native objects keep their dimension.** An object at least 60% associated with a non-baseline dimension always gets at least 1 point (or 10% of its total) of that dimension's leading aspect, replacing its weakest aspect if it already has 4.
+**2b. Native objects keep their dimension.** An object at least 60% associated with a non-baseline dimension always gets at least 1 point (or 10% of its total) of that dimension's guaranteed aspect, replacing its weakest aspect if it already has 4. The guaranteed aspect is the dimension's defining aspect if the pack has it, otherwise its learned lead.
+
+**2c. Craftsmanship.** If the item has recipes, it gets craftsmanship as described under *Crafting complexity* below.
 
 **3. Blend.** Take the weighted average of the distributions. Keep aspects holding at least 12% of the mass, up to 4.
 
@@ -67,7 +72,27 @@ Each object gets a share per dimension. The Overworld is the baseline (configura
 
 **Dimension signatures are learned, not hard-coded.** For each dimension, the mod takes the already-assigned objects native to it and finds the aspects that are over-represented compared with the whole pack: at least 3× the usual rate and at least 5% of the mix. Families of variants count once, so sixteen coloured shulker boxes don't drown out everything else.
 
-This is blended with a small prior in the lexicon. The prior matters most when a dimension has few assigned natives, and is matched by name for dimensions it doesn't list. In an offline test on the author's pack (using hand-picked End and Nether items), the End came out **alienis, then tenebrae**, and the Nether **ignis**. The in-game result is logged at startup. `dimensionAspects` in the config can pin a signature by hand.
+This is blended with a small prior in the lexicon. Prior aspects with weight 1.0 are *defining*: they always join the signature when the pack has them. That is how the Nether includes infernum once Thaumic Additions is installed. The prior matters most when a dimension has few assigned natives, and is matched by name for dimensions it doesn't list. In an offline test on the author's pack (using hand-picked End and Nether items), the End came out **alienis, then tenebrae**, and the Nether **ignis**. The in-game result is logged at startup. `dimensionAspects` in the config can pin a signature by hand.
+
+## Crafting complexity
+
+Thaumaturge's recipe rule conserves material, so crafted items never gain aspects and usually lose some (oak stairs are herba 5, like planks). Its authors add workmanship by hand instead, on key items. This layer extends that intent to every recipe-derived item, including Thaumaturge's own derivations.
+
+**Depth.** An item's depth is the number of steps from raw material. Hand-assigned and recipe-less items are 0; otherwise depth is 1 plus the deepest input of the item's shallowest recipe. The first step is a refinement (log → planks, ore → ingot) and adds nothing.
+
+**Kind.** Each further step adds craftsmanship of one kind, chosen by the item's simplest recipe:
+
+| Kind | When | Aspect |
+|---|---|---|
+| Form | Stonecutting, or the result's name is a regular shape (stairs, slab, wall, brick...) | ordo |
+| Machine | A machine recipe type (`create:*`, `forestry:*`...) | machina |
+| Assembly | Anything else | fabrico |
+
+Cooking and Thaumaturge's magical recipes add none.
+
+**Amount.** About 6% of the item's material per step, at least 1, capped at 30%. Additions flow downstream through Thaumaturge's own ×0.75 rule, so variety builds up along recipe chains.
+
+The shape words, machine recipe types and percentages are all editable in `lexicon.json` under `craftsmanship`. Set `craftingComplexity: false` in the config to turn the layer off.
 
 ## Where it learns from
 
@@ -88,7 +113,7 @@ The test, run during development on the author's 10,595-item pack, hides 20% of 
 
 ## Config: `config/aspect_interpreter.json`
 
-`items`, `entities`, `learnFromThaumaturgeCache`, `dimensionContext`, `baselineDimensions`, `dimensionAspects`, `minConfidence`, `writeReport`, `excludedNamespaces`, `excludedIds`, `excludedWords`.
+`items`, `entities`, `learnFromThaumaturgeCache`, `craftingComplexity`, `dimensionContext`, `baselineDimensions`, `dimensionAspects`, `minConfidence`, `writeReport`, `excludedNamespaces`, `excludedIds`, `excludedWords`.
 
 After each reload, every guess is written to `config/aspect_interpreter/assignments.txt` with its confidence and strongest evidence. To override a guess, give the object a real `base_aspects` or `entity_aspects` entry; real entries always win.
 
