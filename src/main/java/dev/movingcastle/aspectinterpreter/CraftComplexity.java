@@ -24,14 +24,13 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * Thaumaturge's recipe rule conserves: a crafted item gets 75% of its ingredients' aspects and never gains
  * one, so variety shrinks along recipe chains (oak stairs are herba 5, exactly like planks). Its authors
- * put workmanship in by hand instead: fabrico on worked things, ordo on bricks and storage blocks, machina
- * on mechanisms. This layer extends that intent to every recipe-derived item.
+ * put workmanship in by hand instead: fabrico on worked things, ordo on bricks and storage blocks.
  *
- * Each crafting step beyond the first refinement (log to planks, ore to ingot) adds craftsmanship of that
- * step's kind: <b>ordo</b> when the result is a regular form (stairs, slabs, walls, bricks), <b>machina</b>
- * for machine processing, otherwise <b>fabrico</b>. Amounts grow with the number of steps, capped at 30% of
- * the item's material, and pass on to later products through Thaumaturge's own recipe rule. Items with
- * hand-written aspects are never touched.
+ * This layer extends that intent, narrowly: only to items of non-canon mods ({@link Canon}) that are made at
+ * the vanilla crafting table. Each crafting step beyond the first refinement (log to planks, ore to ingot)
+ * adds <b>ordo</b> when the result is a regular form (stairs, slabs, walls, bricks), otherwise <b>fabrico</b>.
+ * Amounts grow with the number of steps, capped at 30% of the item's material. Hand-written items, and every
+ * item of a canon mod, are never touched.
  */
 public final class CraftComplexity {
     private CraftComplexity() {}
@@ -90,16 +89,14 @@ public final class CraftComplexity {
         return base != null && !base.isEmpty();
     }
 
-    /** "form", "machine", "assembly" or null (cooking, magic: nothing to add). Uses the simplest recipe for the item. */
+    static final String TABLE = "minecraft:crafting";
+
+    /** "form", "assembly", or null when the item has no crafting-table recipe. */
     private static String kind(Item item, String id) {
-        Lexicon lex = Knowledge.LEXICON;
-        Step simplest = null;
-        for (Step s : RECIPES.getOrDefault(item, List.of()))
-            if (simplest == null || s.distinctInputs() < simplest.distinctInputs()) simplest = s;
-        if (simplest == null || Lexicon.matchesType(lex.noCraftTypes, simplest.typeId())) return null;
-        if (Lexicon.matchesType(lex.machineTypes, simplest.typeId())) return "machine";
-        if (simplest.typeId().equals("minecraft:stonecutting")) return "form";
-        for (String t : Tokens.of(id)) if (lex.formWords.contains(t)) return "form";
+        boolean table = false;
+        for (Step s : RECIPES.getOrDefault(item, List.of())) table |= s.typeId().equals(TABLE);
+        if (!table) return null;
+        for (String t : Tokens.of(id)) if (Knowledge.LEXICON.formWords.contains(t)) return "form";
         return "assembly";
     }
 
@@ -109,7 +106,7 @@ public final class CraftComplexity {
         Config cfg = Config.get();
         if (!cfg.craftingComplexity || materialTotal <= 0 || preparedFor == null || hasHandAspects(item)) return Map.of();
         String id = BuiltInRegistries.ITEM.getKey(item).toString();
-        if (cfg.excluded(id)) return Map.of();
+        if (cfg.excluded(id) || Canon.isCanon(id)) return Map.of();
         int points;
         String kind;
         synchronized (CraftComplexity.class) {

@@ -22,10 +22,19 @@ final class Config {
     double minConfidence = 0.15;
     /** Write config/aspect_interpreter/assignments.txt after each reload so you can review guesses. */
     boolean writeReport = true;
-    /** Add a missing function aspect (container -> vacuos, lamp -> lux...) to recipe-derived and interpreted items. */
+    /** Add a missing function aspect (container -> vacuos, lamp -> lux...) to items the interpreter fills in. */
     boolean functionLayer = true;
-    /** Add craftsmanship (ordo/fabrico/machina) for each crafting step beyond the first refinement, on recipe-derived items. */
+    /** Add craftsmanship (ordo/fabrico) for each crafting step beyond the first refinement, on non-canon items made at the crafting table. */
     boolean craftingComplexity = true;
+    /** Enrich mobs from their habitat, dimension, behaviour and drops. The only layer that adds to hand-written entries. */
+    boolean mobEnrichment = true;
+    /**
+     * Mods whose aspects are canon: learned from, never added to. Trailing * matches a prefix. Any other mod that ships
+     * its own Thaumaturge aspect files is detected and treated the same way automatically.
+     */
+    List<String> canonNamespaces = new ArrayList<>(List.of("minecraft", "thaumaturge", "thaumadditions", "thaumaturgeadditions",
+            "thaumaturgetweaks", "madmans_dreams", "thaumic_aeronautics", "thaumaturge_node_navigator", "magicbees",
+            "create", "create_*", "createaddition"));
     /** Use where an object spawns, generates or drops (which dimension) as evidence. */
     boolean dimensionContext = true;
     /** Dimensions that carry no special meaning. */

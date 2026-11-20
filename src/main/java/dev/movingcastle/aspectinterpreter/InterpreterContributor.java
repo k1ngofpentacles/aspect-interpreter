@@ -43,7 +43,9 @@ final class InterpreterContributor implements IAspectRecipeContributor {
         long t0 = System.nanoTime();
         Knowledge.rebuildIfStale();
         CraftComplexity.prepare(recipes, registries);
-        if (!DimensionContext.computed()) DimensionContext.compute(net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer());
+        var server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
+        if (!Canon.computed()) Canon.compute(server);
+        if (!DimensionContext.computed()) DimensionContext.compute(server);
         AssignmentLog.clearItems();
         Additions.clear();
         byOutput.clear();
@@ -71,7 +73,7 @@ final class InterpreterContributor implements IAspectRecipeContributor {
     static void finishBuildIfDone() {
         if (!building) return;
         building = false;
-        AspectInterpreter.LOG.info("Aspect Interpreter: filled {} of {} unresolved items; additions to existing items: {}; {} ms of our own work inside Thaumaturge's index build",
+        AspectInterpreter.LOG.info("Aspect Interpreter: filled {} of {} unresolved items; additions: {}; {} ms of our own work inside Thaumaturge's index build",
                 filled, asked, Additions.summary(), buildNanos / 1_000_000);
         // never learn from our own work: exclude guessed items and items we added to from future cache learning
         Set<String> ours = new HashSet<>(FILLED);

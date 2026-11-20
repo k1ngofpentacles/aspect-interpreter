@@ -23,10 +23,19 @@ final class Lexicon {
     final Map<String, Map<String, Double>> dimensions = new HashMap<>();
     // crafting-complexity layer
     final Set<String> formWords = new HashSet<>();
-    final List<String> machineTypes = new ArrayList<>();
-    final List<String> noCraftTypes = new ArrayList<>();
     final Map<String, String> craftAspects = new HashMap<>();
     double craftPerStep = 0.06, craftMaxShare = 0.3;
+    // dimensions: underworlds get no alienis; pools are flavours a native mob may take when they suit it
+    final Set<String> underworlds = new HashSet<>();
+    final Map<String, List<String>> pools = new HashMap<>();
+    // mobs
+    final Set<String> realAnimals = new HashSet<>();
+    final Set<String> fantasyWords = new HashSet<>();
+    final Map<String, Double> fantasyAspects = new HashMap<>();
+    /** "#ns:tag" or a built-in trait ("fire_immune", "monster", "water", "ambient") -> aspect weights. */
+    final Map<String, Map<String, Double>> traits = new LinkedHashMap<>();
+    /** "#c:biome_tag" -> aspect weights: the landscape reading of a biome. */
+    final Map<String, Map<String, Double>> habitats = new LinkedHashMap<>();
     private volatile Map<String, Double> calibration = Map.of();
 
     static Lexicon load() {
@@ -38,17 +47,32 @@ final class Lexicon {
             if (craft != null) {
                 craft.getAsJsonObject("aspects").entrySet().forEach(x -> lex.craftAspects.put(x.getKey(), x.getValue().getAsString()));
                 for (JsonElement w : craft.getAsJsonArray("form_words")) lex.formWords.add(Tokens.norm(w.getAsString()));
-                for (JsonElement w : craft.getAsJsonArray("machine_recipe_types")) lex.machineTypes.add(w.getAsString());
-                for (JsonElement w : craft.getAsJsonArray("no_craft_recipe_types")) lex.noCraftTypes.add(w.getAsString());
                 if (craft.has("per_step")) lex.craftPerStep = craft.get("per_step").getAsDouble();
                 if (craft.has("max_share")) lex.craftMaxShare = craft.get("max_share").getAsDouble();
             }
             JsonObject dims = root.getAsJsonObject("dimensions");
             if (dims != null) for (Map.Entry<String, JsonElement> d : dims.entrySet()) {
-                if (!d.getValue().isJsonObject()) continue;
+                if (d.getKey().equals("_underworlds")) { for (JsonElement u : d.getValue().getAsJsonArray()) lex.underworlds.add(u.getAsString()); continue; }
+                if (d.getKey().equals("_pools")) {
+                    for (Map.Entry<String, JsonElement> pl : d.getValue().getAsJsonObject().entrySet()) {
+                        List<String> l = new ArrayList<>();
+                        for (JsonElement a : pl.getValue().getAsJsonArray()) l.add(a.getAsString());
+                        lex.pools.put(pl.getKey(), l);
+                    }
+                    continue;
+                }
+                if (!d.getValue().isJsonObject() || (d.getKey().startsWith("_") && !d.getKey().equals("_core"))) continue;
                 Map<String, Double> w = new HashMap<>();
                 d.getValue().getAsJsonObject().entrySet().forEach(x -> w.put(x.getKey(), x.getValue().getAsDouble()));
                 lex.dimensions.put(d.getKey(), w);
+            }
+            JsonObject mobs = root.getAsJsonObject("mobs");
+            if (mobs != null) {
+                for (JsonElement w : mobs.getAsJsonArray("real_animals")) lex.realAnimals.add(Tokens.norm(w.getAsString()));
+                for (JsonElement w : mobs.getAsJsonArray("fantasy_words")) lex.fantasyWords.add(Tokens.norm(w.getAsString()));
+                mobs.getAsJsonObject("fantasy_aspects").entrySet().forEach(x -> lex.fantasyAspects.put(x.getKey(), x.getValue().getAsDouble()));
+                readWeights(mobs.getAsJsonObject("traits"), lex.traits);
+                if (mobs.has("habitats")) readWeights(mobs.getAsJsonObject("habitats"), lex.habitats);
             }
             for (Map.Entry<String, JsonElement> a : root.getAsJsonObject("aspects").entrySet()) {
                 JsonObject def = a.getValue().getAsJsonObject();
@@ -70,6 +94,15 @@ final class Lexicon {
             AspectInterpreter.LOG.error("Could not load aspect lexicon", ex);
         }
         return lex;
+    }
+
+    private static void readWeights(JsonObject section, Map<String, Map<String, Double>> into) {
+        for (Map.Entry<String, JsonElement> t : section.entrySet()) {
+            if (!t.getValue().isJsonObject()) continue; // _doc
+            Map<String, Double> w = new LinkedHashMap<>();
+            t.getValue().getAsJsonObject().entrySet().forEach(x -> w.put(x.getKey(), x.getValue().getAsDouble()));
+            into.put(t.getKey(), w);
+        }
     }
 
     record Match(String gram, Map<String, Double> weights) {}
@@ -100,6 +133,10 @@ final class Lexicon {
             if (p.endsWith(":*") ? typeId.startsWith(p.substring(0, p.length() - 1)) : p.equals(typeId)) return true;
         }
         return false;
+    }
+
+    List<String> dimensionPool(String dim) {
+        return pools.getOrDefault(dim, List.of());
     }
 
     Map<String, Double> dimensionPrior(String dim) {

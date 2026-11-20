@@ -33,14 +33,13 @@ import java.util.*;
 /**
  * The "where does this come from" layer. For every dimension it reads, from the running server:
  * <ul>
- *   <li>which creatures its biomes and structures spawn,</li>
- *   <li>which blocks its terrain and world features place,</li>
- *   <li>which items those creatures drop, and which items are named after them (buckets, eggs).</li>
+ *   <li>which creatures its biomes and structures spawn, in which biomes and how often,</li>
+ *   <li>which blocks its terrain and world features place (used only to learn what an unlisted dimension is like),</li>
+ *   <li>which items creatures drop, and which items are named after them (buckets, eggs).</li>
  * </ul>
- * It then learns each dimension's <em>signature</em>: the aspects over-represented among objects already
- * assigned there (the End comes out alienis then tenebrae; the Nether ignis), blended with a small prior from
- * the lexicon. Interpreted objects that belong to a non-baseline dimension receive that signature as evidence,
- * and objects native to one get at least one point of its leading aspect.
+ * Each non-baseline dimension gets a <em>signature</em>: alienis (unless it is an underworld, like the Nether),
+ * then its flavours, from the lexicon or learned from its natives. Dimension flavour belongs to mobs
+ * ({@link MobEnrichment}); among items, only filled-in ones that come from such a mob receive it. Blocks never do.
  */
 final class DimensionContext {
     private DimensionContext() {}
@@ -50,7 +49,15 @@ final class DimensionContext {
     static final double DIMENSION_WEIGHT = 0.5;
     private static final double LIFT_MIN = 3.0, SHARE_MIN = 0.05;
 
+    /** Items that come from mobs (drops, items named after them), by the mobs' dimensions. */
     private static volatile Map<String, Map<String, Double>> itemDims = Map.of();
+    /** Items placed by terrain and features; only for learning unlisted dimensions' signatures. */
+    private static volatile Map<String, Map<String, Double>> blockDims = Map.of();
+    /** Spawn biomes and weights per entity, structure-only flags, and drops per entity. */
+    private static volatile Map<String, Map<Holder<Biome>, Double>> habitats = Map.of();
+    private static volatile Set<String> structureOnly = Set.of();
+    private static volatile Map<String, Set<String>> drops = Map.of();
+    private static volatile Set<String> underworlds = Set.of();
     private static volatile Map<String, Map<String, Double>> entityDims = Map.of();
     private static volatile Map<String, LinkedHashMap<String, Double>> signatures = Map.of();
     /** The aspect a native object is guaranteed: the defining prior aspect if the pack has it, else the learned lead. */
@@ -77,24 +84,43 @@ final class DimensionContext {
         return out;
     }
 
-    /** Guaranteed aspects per dimension, in order: alienis (every non-baseline dimension), then flavour candidates. */
+    /** Per dimension: the aspects every native mob carries (alienis unless an underworld, then the lead flavour). */
     private static volatile Map<String, List<String>> guarantees = Map.of();
+    /** Per dimension: further flavours a native mob may take when they suit it (see {@link MobEnrichment}). */
+    private static volatile Map<String, List<String>> pools = Map.of();
+
+    /** The non-baseline dimension this entity is native to (at least 60% of its spawns), or null. */
+    static String nativeDim(String entityId) {
+        if (!Config.get().dimensionContext) return null;
+        for (Map.Entry<String, Double> d : dims(entityId, true).entrySet())
+            if (d.getValue() >= NATIVE_SHARE && guarantees.containsKey(d.getKey())) return d.getKey();
+        return null;
+    }
+
+    static List<String> guaranteed(String dim) { return guarantees.getOrDefault(dim, List.of()); }
+
+    static List<String> pool(String dim) { return pools.getOrDefault(dim, List.of()); }
+
+    static boolean underworld(String dim) { return underworlds.contains(dim); }
+
+    static Map<Holder<Biome>, Double> habitat(String entityId) { return habitats.getOrDefault(entityId, Map.of()); }
+
+    static boolean structureOnly(String entityId) { return structureOnly.contains(entityId); }
+
+    static Set<String> drops(String entityId) { return drops.getOrDefault(entityId, Set.of()); }
 
     /**
-     * What a native object must carry: alienis, plus the dimension's top available flavour. Missing ones are added, sized like minor aspects in the original layer. Applies to
-     * hand-written, recipe-derived and interpreted objects alike; nothing existing is ever replaced.
+     * For a filled-in item that comes from a mob native to another dimension (cosmic cod, its bucket): the
+     * dimension's guaranteed aspects, sized like minor aspects in the original layer. Nothing for blocks.
      */
-    static Map<String, Integer> additions(String id, boolean entity, Set<String> present, int total) {
+    static Map<String, Integer> dropAdditions(String itemId, Set<String> present, int total) {
         if (!Config.get().dimensionContext || total <= 0) return Map.of();
         Map<String, Integer> add = new LinkedHashMap<>();
-        for (Map.Entry<String, Double> d : dims(id, entity).entrySet()) {
+        for (Map.Entry<String, Double> d : dims(itemId, false).entrySet()) {
             if (d.getValue() < NATIVE_SHARE) continue;
             List<String> g = guarantees.get(d.getKey());
             if (g == null || g.isEmpty()) continue;
-            String core = g.get(0);
-            if (!present.contains(core)) add.put(core, size(core, total));
-            // the dimension's top flavour (infernum for the Nether when Thaumic Additions is installed, else ignis)
-            if (g.size() > 1 && !present.contains(g.get(1))) add.put(g.get(1), size(g.get(1), total));
+            for (String a : g) if (!present.contains(a)) add.put(a, size(a, total));
             break;
         }
         return add;
@@ -102,13 +128,6 @@ final class DimensionContext {
 
     private static int size(String aspect, int total) {
         return (int) Math.max(1, Math.round(Knowledge.minorShare(aspect) * total));
-    }
-
-    /** For interpreted objects: merge the native additions into a guess. */
-    static void ensureNative(LinkedHashMap<String, Integer> aspects, String id, boolean entity) {
-        int total = 0;
-        for (int x : aspects.values()) total += x;
-        additions(id, entity, aspects.keySet(), total).forEach((a, x) -> aspects.merge(a, x, Integer::sum));
     }
 
     static String describe(String id, boolean entity) {
@@ -133,6 +152,9 @@ final class DimensionContext {
 
         Map<String, Map<String, Double>> ents = new HashMap<>();
         Map<String, Map<String, Double>> items = new HashMap<>();
+        Map<String, Map<String, Double>> blockItems = new HashMap<>();
+        Map<String, Map<Holder<Biome>, Double>> habs = new HashMap<>();
+        Set<String> biomeSpawners = new HashSet<>(), structureSpawners = new HashSet<>();
         Map<Holder<Biome>, Set<String>> biomeDims = new HashMap<>();
 
         for (ServerLevel level : server.getAllLevels()) {
@@ -145,8 +167,12 @@ final class DimensionContext {
                 biomeDims.computeIfAbsent(b, k -> new HashSet<>()).add(dim);
                 MobSpawnSettings mobs = b.value().getMobSettings();
                 for (MobCategory c : MobCategory.values())
-                    for (MobSpawnSettings.SpawnerData sd : mobs.getMobs(c).unwrap())
-                        bump(ents, EntityType.getKey(sd.type).toString(), dim, 1);
+                    for (MobSpawnSettings.SpawnerData sd : mobs.getMobs(c).unwrap()) {
+                        String eid = EntityType.getKey(sd.type).toString();
+                        bump(ents, eid, dim, 1);
+                        habs.computeIfAbsent(eid, k -> new HashMap<>()).merge(b, (double) Math.max(1, sd.getWeight().asInt()), Math::max);
+                        biomeSpawners.add(eid);
+                    }
                 for (HolderSet<PlacedFeature> step : b.value().getGenerationSettings().features())
                     for (Holder<PlacedFeature> pf : step)
                         collectBlocks(pf.value(), ops, configured, placed, seen, blocks);
@@ -159,7 +185,7 @@ final class DimensionContext {
             }
             for (String block : blocks) {
                 Item it = BuiltInRegistries.BLOCK.get(ResourceLocation.parse(block)).asItem();
-                if (it != Items.AIR) bump(items, BuiltInRegistries.ITEM.getKey(it).toString(), dim, 1);
+                if (it != Items.AIR) bump(blockItems, BuiltInRegistries.ITEM.getKey(it).toString(), dim, 1);
             }
         }
 
@@ -169,20 +195,28 @@ final class DimensionContext {
             for (Holder<Biome> b : s.biomes()) sdims.addAll(biomeDims.getOrDefault(b, Set.of()));
             if (sdims.isEmpty()) continue;
             for (StructureSpawnOverride o : s.spawnOverrides().values())
-                for (MobSpawnSettings.SpawnerData sd : o.spawns().unwrap())
-                    for (String d : sdims) bump(ents, EntityType.getKey(sd.type).toString(), d, 2);
+                for (MobSpawnSettings.SpawnerData sd : o.spawns().unwrap()) {
+                    String eid = EntityType.getKey(sd.type).toString();
+                    structureSpawners.add(eid);
+                    for (String d : sdims) bump(ents, eid, d, 2);
+                }
         }
 
         Map<String, Map<String, Double>> entShares = normalise(ents);
 
-        // what those creatures drop, and items named after them
-        for (Map.Entry<String, Map<String, Double>> e : entShares.entrySet()) {
-            EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.parse(e.getKey()));
+        // what every mob drops; for natives of a dimension, those drops come from there too
+        Map<String, Set<String>> dropMap = new HashMap<>();
+        for (EntityType<?> type : BuiltInRegistries.ENTITY_TYPE) {
+            if (type.getCategory() == MobCategory.MISC) continue;
+            String eid = EntityType.getKey(type).toString();
             try {
                 LootTable table = server.reloadableRegistries().getLootTable(type.getDefaultLootTable());
                 Set<String> dropped = new HashSet<>();
                 LootTable.DIRECT_CODEC.encodeStart(ops, table).result().ifPresent(j -> scanItemIds(j, dropped));
-                for (String it : dropped) e.getValue().forEach((d, s) -> bump(items, it, d, s));
+                if (dropped.isEmpty()) continue;
+                dropMap.put(eid, dropped);
+                Map<String, Double> shares = entShares.get(eid);
+                if (shares != null) for (String it : dropped) shares.forEach((d, s) -> bump(items, it, d, s));
             } catch (Throwable ignored) {}
         }
         Map<String, String> entityPaths = new HashMap<>();
@@ -200,20 +234,30 @@ final class DimensionContext {
         }
 
         itemDims = normalise(items);
+        blockDims = normalise(blockItems);
         entityDims = entShares;
+        habitats = habs;
+        drops = dropMap;
+        Set<String> sOnly = new HashSet<>(structureSpawners);
+        sOnly.removeAll(biomeSpawners);
+        structureOnly = sOnly;
+        underworlds = new HashSet<>(Knowledge.LEXICON.underworlds);
         Map<String, String> newLeads = new HashMap<>();
-        signatures = learnSignatures(new TreeSet<>(itemDims.values().stream().flatMap(m -> m.keySet().stream()).toList()), access, newLeads);
+        Set<String> allDims = new TreeSet<>();
+        for (ServerLevel level : server.getAllLevels()) allDims.add(level.dimension().location().toString());
+        signatures = learnSignatures(allDims, access, newLeads);
         leads = newLeads;
         computed = true;
         StringJoiner sj = new StringJoiner("; ");
         signatures.forEach((d, s) -> sj.add(d + " -> " + String.join("/", s.keySet().stream().map(a -> a.replace("thaumaturge:", "")).toList())
                 + " (guaranteed: " + leads.getOrDefault(d, "-").replace("thaumaturge:", "") + ")"));
-        AspectInterpreter.LOG.info("Aspect Interpreter dimension context: {} items and {} entities placed in {} ms. Signatures: {}",
+        AspectInterpreter.LOG.info("Aspect Interpreter dimension context: {} mob-derived items and {} entities placed in {} ms. Signatures: {}",
                 itemDims.size(), entityDims.size(), (System.nanoTime() - t0) / 1_000_000, sj.length() == 0 ? "none" : sj);
     }
 
     /**
-     * Signature per non-baseline dimension: alienis first (every other world is alien), then up to two flavours.
+     * Signature per non-baseline dimension: alienis first (every other world is alien, except underworlds such as
+     * the Nether, which is this world's below rather than an outer one), then up to two flavours.
      * Flavours come from the lexicon's prior for that dimension when the pack has those aspects; otherwise from
      * the aspects most over-represented among its already-assigned natives; otherwise from its name.
      */
@@ -233,28 +277,36 @@ final class DimensionContext {
 
         Map<String, LinkedHashMap<String, Double>> out = new HashMap<>();
         Map<String, List<String>> guar = new HashMap<>();
+        Map<String, List<String>> poolOut = new HashMap<>();
         for (String dim : dims) {
             if (cfg.baselineDimensions.contains(dim)) continue;
+            List<String> dimCore = underworlds.contains(dim) ? List.of() : core;
             // flavours: config override, else lexicon prior, else learned, else name
             List<Map.Entry<String, Double>> flav = new ArrayList<>();
             Map<String, Double> override = cfg.dimensionAspects.get(dim);
             Map<String, Double> prior = override != null ? override : Knowledge.LEXICON.dimensionPrior(dim);
-            prior.forEach((a, w) -> { if (available.contains(a) && !core.contains(a)) flav.add(Map.entry(a, w)); });
-            if (flav.isEmpty()) learned(dim, items, ents, global).forEach((a, w) -> { if (available.contains(a) && !core.contains(a)) flav.add(Map.entry(a, w)); });
-            if (flav.isEmpty()) prior(dim).forEach((a, w) -> { if (available.contains(a) && !core.contains(a)) flav.add(Map.entry(a, w)); });
+            prior.forEach((a, w) -> { if (available.contains(a) && !dimCore.contains(a)) flav.add(Map.entry(a, w)); });
+            if (flav.isEmpty()) learned(dim, items, ents, global).forEach((a, w) -> { if (available.contains(a) && !dimCore.contains(a)) flav.add(Map.entry(a, w)); });
+            if (flav.isEmpty()) prior(dim).forEach((a, w) -> { if (available.contains(a) && !dimCore.contains(a)) flav.add(Map.entry(a, w)); });
             flav.sort((a, b) -> Double.compare(b.getValue(), a.getValue()));
 
             LinkedHashMap<String, Double> sig = new LinkedHashMap<>();
-            for (String c : core) sig.put(c, 1.0);
+            for (String c : dimCore) sig.put(c, 1.0);
             for (int i = 0; i < Math.min(2, flav.size()); i++) sig.put(flav.get(i).getKey(), flav.get(i).getValue());
             if (sig.isEmpty()) continue;
             out.put(dim, sig);
-            List<String> g = new ArrayList<>(core);
-            for (Map.Entry<String, Double> f : flav) if (f.getValue() >= 0.8 || f == flav.get(0)) g.add(f.getKey());
+            // guaranteed: the core (if any) and the lead flavour; the rest of the flavours form the pool
+            List<String> g = new ArrayList<>(dimCore);
+            if (!flav.isEmpty()) g.add(flav.get(0).getKey());
             guar.put(dim, g);
-            leadsOut.put(dim, String.join("+", g.subList(0, Math.min(g.size(), core.size() + 1))));
+            List<String> p = new ArrayList<>();
+            for (String a : Knowledge.LEXICON.dimensionPool(dim)) if (available.contains(a) && !g.contains(a)) p.add(a);
+            if (p.isEmpty()) for (int i = 1; i < flav.size(); i++) p.add(flav.get(i).getKey());
+            poolOut.put(dim, p);
+            leadsOut.put(dim, String.join("+", g) + (p.isEmpty() ? "" : ", may add " + String.join("/", p.stream().map(Additions::shortName).toList())));
         }
         guarantees = guar;
+        pools = poolOut;
         return out;
     }
 
@@ -263,6 +315,7 @@ final class DimensionContext {
         Map<List<String>, Integer> fams = new HashMap<>();
         List<Map.Entry<String, Map<String, Double>>> natives = new ArrayList<>();
         collectNatives(itemDims, items, dim, natives);
+        collectNatives(blockDims, items, dim, natives);
         collectNatives(entityDims, ents, dim, natives);
         for (Map.Entry<String, Map<String, Double>> e : natives) fams.merge(family(e.getKey()), 1, Integer::sum);
         Map<String, Double> mean = new HashMap<>();

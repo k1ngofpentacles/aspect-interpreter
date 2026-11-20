@@ -16,9 +16,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import java.util.Optional;
 
 /**
- * Thaumaturge's crafting rule conserves material only. After it has derived an item from a crafting
- * recipe, add what that rule cannot: the item's dimension, its function, and craftsmanship for the extra
- * steps that went into it (see {@link Additions}). Hand-written items never reach this method.
+ * Thaumaturge's crafting rule conserves material only. After it has derived an item from a recipe, add
+ * craftsmanship for the extra steps that went into it, but only for items of non-canon mods made at the
+ * crafting table (see {@link Additions}). Hand-written items never reach this method.
  */
 @Mixin(value = CraftingAspectContributor.class, remap = false)
 public abstract class CraftingAspectContributorMixin {

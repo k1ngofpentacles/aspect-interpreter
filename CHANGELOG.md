@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.6.0
+A rebalance around three axes: aspect rarity, resource scarcity and processing effort. Mobs become the richest, hardest-to-process source; the original index is otherwise left alone.
+
+- **Mob enrichment.** Every mob, hand-written or guessed, gains aspects from four sources:
+  - **Habitat:** its spawn biomes, read through biome tags (snowy → gelum, forest → herba, ocean → aqua) and blended with Thaumaturge's own biome aspects.
+  - **Dimension:** see below.
+  - **Behaviour:** undead, arthropod, illager, aquatic, fire-immune and hostile traits.
+  - **Drops:** the aspects of its loot.
+- **Fantasy score.** Habitat and dimension weigh more on fantasy mobs. The score combines real-animal names, fantasy words, fantasy aspects, other dimensions, undeath and boss status.
+- **Counts scale with the mob.** Ordinary mobs reach 3–4 aspects, fantasy and other-dimension mobs 4–5, bosses 6–7.
+- **Rarity.** Rarer mobs carry more: bosses ×2, structure-only spawns ×1.5, rare spawns ×1.3. Hand-written mobs keep their written amounts; only their additions grow.
+- **Dimension flavour is for mobs.** It goes on native mobs, and on interpreted items that come from them (cosmic cod, its bucket), never on blocks or hand-written items.
+- **The Nether is an underworld.** No alienis there. Natives get infernum, plus ignis, exanimis, mortuus or spiritus only when those suit the mob: a ghast takes spiritus, a zombified piglin mortuus, a strider neither.
+- **Canon detection.** Any mod that ships its own Thaumaturge aspect files is now recognised automatically. Its aspects are learned from but never added to, like Thaumaturge's own.
+- **Craftsmanship narrowed.** It now applies only to items of non-canon mods made at the vanilla crafting table. Machine-recipe machina is gone.
+- **Function layer narrowed.** It now applies only to items the interpreter fills in.
+- **Removed:** dimension additions to hand-written and recipe-derived items (the `collectBase` mixin is gone).
+- **New config options:** `mobEnrichment`, `canonNamespaces`.
+
 ## 1.5.0
 - **Function layer.** Recipe-derived and interpreted items get a missing function aspect named by the head of their name: barrel → vacuos, lantern → lux, mace → aversio, gearbox → machina. Each pair is checked against the pack's hand-written items.
 - **Every non-Overworld dimension is alien.** Natives get alienis plus a flavour: infernum/ignis for the Nether, vacuos/tenebrae for the End, tenebrae/praecantatio for the Otherside. This now applies to hand-written items and real creature entries too, as additions only, and flows through recipes.

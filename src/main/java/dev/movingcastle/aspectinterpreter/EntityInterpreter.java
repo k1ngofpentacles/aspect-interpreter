@@ -72,21 +72,25 @@ public final class EntityInterpreter {
         Knowledge.rebuildIfStale();
         learnCategories();
         Additions.clearEntities();
+        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+        MobEnrichment.prepare(server == null ? null : server.registryAccess());
         Map<EntityType<?>, Map<String, Double>> fresh = new HashMap<>();
         for (EntityType<?> type : BuiltInRegistries.ENTITY_TYPE) {
-            AspectList real = type.builtInRegistryHolder().getData(AspectDataMaps.ENTITY_ASPECTS);
-            if (real == null || real.isEmpty()) { fresh.put(type, compute(type)); continue; }
-            // real entries keep everything they have; natives of other dimensions gain alienis and its flavour
             String id = EntityType.getKey(type).toString();
-            Map<String, Integer> realInts = new LinkedHashMap<>();
-            Knowledge.toMap(real).forEach((a, x) -> realInts.put(a, (int) Math.round(x)));
-            Map<String, Integer> augmented = Config.get().excluded(id) ? null : Additions.forRealEntity(id, realInts);
-            if (augmented != null) {
-                Map<String, Double> d = new LinkedHashMap<>();
-                augmented.forEach((a, x) -> d.put(a, (double) x));
-                fresh.put(type, d);
-            }
+            AspectList real = type.builtInRegistryHolder().getData(AspectDataMaps.ENTITY_ASPECTS);
+            boolean isReal = real != null && !real.isEmpty();
+            Map<String, Integer> base = new LinkedHashMap<>();
+            if (isReal) Knowledge.toMap(real).forEach((a, x) -> base.put(a, (int) Math.round(x)));
+            else compute(type).forEach((a, x) -> base.put(a, (int) Math.round(x)));
+            if (base.isEmpty()) continue;
+            // hand-written entries keep every aspect and amount; enrichment only adds
+            Map<String, Integer> enriched = MobEnrichment.enrich(type, id, base, isReal);
+            if (enriched == null && isReal) continue; // unchanged real entry: Thaumaturge's own value stands
+            Map<String, Double> d = new LinkedHashMap<>();
+            (enriched != null ? enriched : base).forEach((a, x) -> d.put(a, (double) x));
+            fresh.put(type, d);
         }
+        AspectInterpreter.LOG.info("Aspect Interpreter mobs: {}", Additions.entitySummary());
         GUESSES.clear();
         GUESSES.putAll(fresh);
         LISTS.clear();
@@ -200,7 +204,6 @@ public final class EntityInterpreter {
             // Only living creatures: projectiles and body-part entities are fire-immune for technical reasons.
             extra.add(new Model.Source("fireproof", Map.of(T + "ignis", 1.0), 0.2));
         }
-        extra.addAll(DimensionContext.sources(id, true));
         double size = Math.cbrt(Math.max(0.01, type.getWidth() * type.getWidth() * type.getHeight()));
         double fallback = 25 * Math.max(0.4, Math.min(2.0, size / 0.9));
         Model.Prediction p = Knowledge.entities().predict(id, extra, fallback, forcedTotal);
@@ -208,10 +211,13 @@ public final class EntityInterpreter {
             AssignmentLog.entity(id, null, p == null ? 0 : p.confidence(), p == null ? "no evidence" : "below min_confidence");
             return Map.of();
         }
-        DimensionContext.ensureNative(p.aspects(), id, true);
-        AssignmentLog.entity(id, p.aspects(), p.confidence(), p.basis() + DimensionContext.describe(id, true));
+        // rarer mobs carry more: bosses, structure-only and rare spawns get a larger total
+        double r = cat == MobCategory.MISC ? 1.0 : MobEnrichment.rarity(type, id);
         Map<String, Double> out = new LinkedHashMap<>();
-        p.aspects().forEach((a, x) -> out.put(a, (double) x));
+        p.aspects().forEach((a, x) -> out.put(a, (double) Math.max(1, Math.round(x * r))));
+        Map<String, Integer> logged = new LinkedHashMap<>();
+        out.forEach((a, x) -> logged.put(a, (int) Math.round(x)));
+        AssignmentLog.entity(id, logged, p.confidence(), p.basis() + DimensionContext.describe(id, true));
         return out;
     }
 

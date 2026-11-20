@@ -26,7 +26,7 @@ import java.security.MessageDigest;
 @Mod(AspectInterpreter.MODID)
 public final class AspectInterpreter {
     public static final String MODID = "aspect_interpreter";
-    static final String VERSION = "1.5.0";
+    static final String VERSION = "1.6.0";
     static final Logger LOG = LogUtils.getLogger();
 
     public AspectInterpreter(IEventBus modBus, ModContainer container) {
@@ -56,6 +56,7 @@ public final class AspectInterpreter {
     private static void refresh(MinecraftServer server) {
         try {
             Knowledge.rebuildIfStale();
+            Canon.compute(server);
             DimensionContext.compute(server);
             EntityInterpreter.warmUp();
             AssignmentLog.write();

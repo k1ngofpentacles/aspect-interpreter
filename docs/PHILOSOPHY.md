@@ -81,11 +81,13 @@ Victus (life) is almost never used for mobs.
 |---|---|
 | Material first, function second | Neighbours and word profiles carry material. The meaning lexicon and physical evidence add function, at lower weight. |
 | Recipes conserve | Thaumaturge's own derivation is kept for material, and recipe types it doesn't read are evaluated the same way (× 0.75). |
-| Workmanship is hand-planted, so derived items lose it | **Crafting complexity (1.4.0).** Each crafting step beyond the first refinement adds craftsmanship of its kind: **ordo** for regular forms (stairs, slabs, walls, bricks; stonecutting), **machina** for machine processing (Create, Forestry and similar), **fabrico** for assembly. It is about 6% of the material per step, capped at 30%. Cooking and magic add none, since Thaumaturge already adds heat and praecantatio. Authored items are never touched, and the additions flow downstream through Thaumaturge's own rule. |
+| Workmanship is hand-planted, so derived items lose it | **Crafting complexity (1.4.0, narrowed in 1.6.0).** For items of non-canon mods made at the vanilla crafting table, each step beyond the first refinement adds **ordo** for regular forms (stairs, slabs, walls, bricks) or **fabrico** for assembly, about 6% of the material per step, capped at 30%. Canon mods' items, hand-written or derived, are never touched. |
 | Habitat element for creatures | Category defaults are **learned** from the pack's own `entity_aspects` (only aspects most members share), falling back to bestia + terra for land creatures and aqua + bestia for water. |
-| Function is hand-planted, so derived items lose it | **Function layer (1.5.0).** A recipe-derived or interpreted item whose name's *head* (its last word or two) names a function gets that aspect if it lacks it: container → vacuos, lamp → lux, armour → praemunio, book → cognitio. Each pair is checked against the pack's hand-written items and dropped if the authors don't do it (Thaumaturge's bottles aren't vacuos). It adds one aspect at most, sized like a minor aspect. |
-| Dimension as habitat | **Dimension context (1.3.0, reworked in 1.5.0).** Every world but the Overworld is alien: its natives get **alienis**, then their dimension's **flavour**: ignis/infernum for the Nether (infernum when Thaumic Additions is installed), vacuos/tenebrae for the End, tenebrae/praecantatio for the Otherside. Unlisted dimensions are flavoured by what's learned from their natives. This applies to hand-written entries and real creatures too, as additions only, so crafted nether bricks inherit it through Thaumaturge's own recipe rule. |
-| Addon aspects are rare | They are only used where an add-on defines them or a dimension's flavour calls for them. |
+| Function is hand-planted, so derived items lose it | **Function layer (1.5.0, narrowed in 1.6.0).** An interpreted item whose name's *head* (its last word or two) names a function gets that aspect if it lacks it: container → vacuos, lamp → lux, armour → praemunio, book → cognitio. Each pair is checked against the pack's hand-written items and dropped if the authors don't do it (Thaumaturge's bottles aren't vacuos). It adds one aspect at most, sized like a minor aspect. |
+| Creatures are nature + habitat + drive | **Mob enrichment (1.6.0).** See section 8. Mobs are where variety and dimension flavour belong. |
+| Dimension as habitat | **Dimension context (1.3.0, reworked in 1.6.0).** Every world but the Overworld is alien, except the Nether, an underworld: this world's below rather than an outer one. Dimension flavour goes on native mobs and on interpreted items that come from them, never on blocks or hand-written items. |
+| Addon aspects are rare | They are only used where an add-on defines them or a mob's dimension calls for them. |
+| Hand-written aspects are authorial | **Canon (1.6.0).** Vanilla, Thaumaturge and its add-ons, Create and its add-ons, and any mod detected shipping its own aspect files are learned from but never added to (their mobs excepted). |
 | Scarcity | See section 6. |
 
 ### Prototype results on vanilla recipe chains
@@ -128,7 +130,7 @@ So most things are one or two materials, minor aspects are small, and the magica
 
 Guess totals match the original at the median (ratio 1.00).
 
-**Additions are sized like the original's minor aspects.** Each added aspect uses that aspect's median minor share in the pack, capped at 20%. Function and craftsmanship stop at 5 aspects, which only 1% of hand-written items reach. Hand-written entries only ever receive dimension additions.
+**Additions are sized like the original's minor aspects.** Each added aspect uses that aspect's median minor share in the pack, capped at 20%. Function and craftsmanship stop at 5 aspects, which only 1% of hand-written items reach. (Since 1.6.0, hand-written items receive no additions at all; only mobs do.)
 
 **Whole-pack simulation** (original index + guesses for the 3,674 unassigned items + function and craftsmanship layers; the dimension layer needs a running world and isn't included):
 
@@ -143,5 +145,33 @@ The scarcity order of aspects is essentially unchanged. Function aspects rise to
 
 ## 7. Open questions
 
-- **Dimension additions:** their effect on scarcity can only be measured in game. The log reports how many objects they touched.
+- **Mob enrichment in modded packs:** the vanilla preview below uses vanilla's spawn data; modded mobs depend on how their mods register spawns and tags. The report lists every mob's fantasy score, rarity and additions.
 - **Single-aspect guesses:** guesses for items with no close neighbour still rarely have a single aspect (16% across the unassigned items).
+
+## 8. Three axes of balance (1.6.0)
+
+An aspect source is balanced along three axes: how rare its aspects are, how scarce the resource is, and how much processing it takes to extract them.
+
+- **Mobs** are the richest source and the hardest to process. A mob carries the most varied mix (nature, habitat, drive), and taking aspects from a living creature is harder than breaking a block. So mobs are where variety belongs, and where dimension flavour belongs.
+- **Blocks and items** stay as their authors wrote them. They are plentiful, and a single material is what most of them are. The original layer keeps 40% of items at one aspect, and that is preserved.
+- **Resource scarcity scales mobs only.** A boss, a structure guardian or a rare spawn carries more than a common animal: ×2, ×1.5 and ×1.3 on what is added.
+
+**Fantasy and ordinary creatures.** Thaumaturge's own mobs show the split. Its animals are nature + habitat (a cow is bestia + terra), while its fantasy creatures carry their otherness (a blaze is alienis + ignis, a phantom exanimis + spiritus). So habitat and dimension weigh more as a mob's fantasy score rises.
+
+**The Nether is an underworld.** In the original data, Nether creatures carry fire and death, not alienness: ghasts are exanimis + ignis, zombified piglins exanimis + ignis + bestia, hoglins bestia + aversio + ignis. Only the blaze carries alienis. The End's natives do carry alienis (endermites, shulkers, the dragon). The rule follows the authors.
+
+**Thaumaturge's biome aspects are a palette, not a habitat.** Its biome map gives aura nodes a primal mix (cold biomes ordo, plains aer, swamps perditio). Read as habitat it would make a polar bear orderly. So a landscape reading from biome tags leads, and the palette counts at half weight where the landscape is silent.
+
+**Vanilla preview** (Thaumaturge's 87 vanilla mob entries, vanilla spawn and loot data):
+
+| Mob | Hand-written | Added |
+|---|---|---|
+| ghast | exanimis 15, ignis 15 | infernum 4, spiritus 3, aversio 3 |
+| zombified piglin | exanimis 15, ignis 15, bestia 10 | infernum 7, mortuus 7 |
+| strider | bestia 10, ignis 10, motus 5 | infernum 4 |
+| stray | exanimis 20, humanus 5, vinculum 5 | gelum 5, aversio 4 |
+| cow | bestia 15, terra 15 | herba 3 |
+| wither (boss) | exanimis 50, perditio 25, ignis 25 | mortuus 21, potentia 21, aversio 19 |
+| allay, breeze, vex, shulker | (4 aspects each) | nothing: already rich, and no candidate is strong enough |
+
+Mean aspects per mob 2.9 → 3.7; mean total 27 → 31.

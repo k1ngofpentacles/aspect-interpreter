@@ -2713,14 +2713,43 @@
   "on"
  ],
  "dimensions": {
-  "_doc": "Every dimension except the baseline (the Overworld) is alien: its natives get some alienis. Then each is flavoured. Weight 1.0 = the flavour guaranteed to natives (the first one the pack has and the object lacks); lower weights are extra evidence for interpreted objects. Unlisted dimensions are flavoured by what is learned from their natives, or by matching their name against the lexicon.",
+  "_doc": "Every dimension except the baseline (the Overworld) is alien: its native mobs get some alienis, except underworlds (the Nether is this world's below, not an outer world). Each is then flavoured: weight 1.0 is the lead flavour every native mob carries (the first one the pack has); _pools lists further flavours a native mob takes only when they suit it (its name, traits, drops). Dimension flavour goes on mobs, and on filled-in items that come from them; never on blocks. Unlisted dimensions are flavoured by what is learned from their natives, or by matching their name against the lexicon.",
   "_core": {
    "thaumaturge:alienis": 1.0
   },
+  "_underworlds": [
+   "minecraft:the_nether"
+  ],
+  "_pools": {
+   "minecraft:the_nether": [
+    "thaumaturge:ignis",
+    "thaumaturge:exanimis",
+    "thaumaturge:mortuus",
+    "thaumaturge:spiritus"
+   ],
+   "minecraft:the_end": [
+    "thaumaturge:tenebrae",
+    "thaumaturge:vacuos"
+   ],
+   "deeperdarker:otherside": [
+    "thaumaturge:praecantatio",
+    "thaumaturge:sensus"
+   ],
+   "aether:the_aether": [
+    "thaumadditions:caeles",
+    "thaumaturge:lux"
+   ],
+   "twilightforest:twilight_forest": [
+    "thaumaturge:tenebrae",
+    "thaumaturge:praecantatio"
+   ],
+   "madmans_dreams:dream": [
+    "thaumaturge:cognitio"
+   ]
+  },
   "minecraft:the_nether": {
    "thaumadditions:infernum": 1.0,
-   "thaumaturge:ignis": 0.9,
-   "thaumaturge:perditio": 0.3
+   "thaumaturge:ignis": 0.9
   },
   "minecraft:the_end": {
    "thaumaturge:vacuos": 1.0,
@@ -2747,11 +2776,10 @@
   }
  },
  "craftsmanship": {
-  "_doc": "Crafting-complexity layer. Each crafting step beyond the first refinement (log->planks, ore->ingot) adds craftsmanship of the step's kind: 'form' when the result is a regular architectural shape, 'machine' for machine processing, otherwise 'assembly'. Cooking and Thaumaturge's own magical recipes add none (Thaumaturge already adds heat and praecantatio).",
+  "_doc": "Crafting-complexity layer. Only for items of non-canon mods (not vanilla, not Thaumaturge and its add-ons, not Create and its add-ons, not any mod that hand-writes its own aspects) made at the vanilla crafting table. Each crafting step beyond the first refinement (log->planks, ore->ingot) adds 'form' craftsmanship when the result is a regular architectural shape, otherwise 'assembly'.",
   "aspects": {
    "form": "thaumaturge:ordo",
-   "assembly": "thaumaturge:fabrico",
-   "machine": "thaumaturge:machina"
+   "assembly": "thaumaturge:fabrico"
   },
   "form_words": [
    "stair",
@@ -2792,27 +2820,11 @@
    "molding",
    "trim"
   ],
-  "machine_recipe_types": [
-   "create:*",
-   "createaddition:*",
-   "create_thaumaturgy:*",
-   "forestry:*",
-   "immersiveengineering:*",
-   "mekanism:*",
-   "thermal:*"
-  ],
-  "no_craft_recipe_types": [
-   "minecraft:smelting",
-   "minecraft:blasting",
-   "minecraft:smoking",
-   "minecraft:campfire_cooking",
-   "thaumaturge:*"
-  ],
   "per_step": 0.06,
   "max_share": 0.3
  },
  "functions": {
-  "_doc": "What an object is FOR. Added to recipe-derived and interpreted items whose names call for it, when the aspect is missing. Each word-aspect pair is checked against the pack's hand-written items: if 3 or more of them contain the word and fewer than half carry the aspect, the pack's authors don't do this, and the pair is skipped. Only the head of the name counts (its last word or two, after colour and size words): an armor_stand is a stand, not armour.",
+  "_doc": "What an object is FOR. Added only to items the interpreter fills in whose names call for it, when the aspect is missing. Each word-aspect pair is checked against the pack's hand-written items: if 3 or more of them contain the word and fewer than half carry the aspect, the pack's authors don't do this, and the pair is skipped. Only the head of the name counts (its last word or two, after colour and size words): an armor_stand is a stand, not armour.",
   "thaumaturge:vacuos": [
    "chest",
    "barrel",
@@ -3025,5 +3037,410 @@
    "workstation",
    "bench"
   ]
+ },
+ "mobs": {
+  "_doc": "Mob enrichment. A mob's aspects are enriched from four sources: its habitat (Thaumaturge's own biome aspects for the biomes it spawns in), its dimension, its behaviour (the traits below) and what it drops. Habitat and dimension count for more on fantasy mobs. The fantasy score starts at 0.3 and moves down for real animals and up for fantasy words, fantasy aspects, other dimensions, undeath and bosses. Hand-written mobs keep every aspect and amount they have; additions only.",
+  "real_animals": [
+   "cow",
+   "pig",
+   "sheep",
+   "chicken",
+   "horse",
+   "donkey",
+   "mule",
+   "llama",
+   "camel",
+   "goat",
+   "wolf",
+   "fox",
+   "cat",
+   "ocelot",
+   "rabbit",
+   "bat",
+   "bee",
+   "parrot",
+   "turtle",
+   "frog",
+   "tadpole",
+   "axolotl",
+   "cod",
+   "salmon",
+   "pufferfish",
+   "tropical_fish",
+   "fish",
+   "squid",
+   "dolphin",
+   "panda",
+   "polar_bear",
+   "bear",
+   "armadillo",
+   "sniffer",
+   "deer",
+   "moose",
+   "elk",
+   "boar",
+   "duck",
+   "goose",
+   "owl",
+   "crow",
+   "raven",
+   "eagle",
+   "hawk",
+   "seagull",
+   "pigeon",
+   "sparrow",
+   "crab",
+   "lobster",
+   "shrimp",
+   "snail",
+   "slug",
+   "worm",
+   "beetle",
+   "ant",
+   "butterfly",
+   "moth",
+   "dragonfly",
+   "spider",
+   "scorpion",
+   "snake",
+   "lizard",
+   "gecko",
+   "iguana",
+   "crocodile",
+   "alligator",
+   "hippo",
+   "rhino",
+   "elephant",
+   "giraffe",
+   "zebra",
+   "lion",
+   "tiger",
+   "leopard",
+   "jaguar",
+   "cheetah",
+   "hyena",
+   "monkey",
+   "gorilla",
+   "kangaroo",
+   "koala",
+   "platypus",
+   "raccoon",
+   "skunk",
+   "badger",
+   "otter",
+   "beaver",
+   "squirrel",
+   "mouse",
+   "rat",
+   "hamster",
+   "hedgehog",
+   "mole",
+   "seal",
+   "walrus",
+   "whale",
+   "shark",
+   "orca",
+   "octopus",
+   "jellyfish",
+   "stingray",
+   "ray",
+   "eel",
+   "catfish",
+   "bass",
+   "trout",
+   "carp",
+   "tuna",
+   "anglerfish",
+   "bison",
+   "buffalo",
+   "yak",
+   "ostrich",
+   "emu",
+   "penguin",
+   "flamingo",
+   "peacock",
+   "toucan",
+   "pelican",
+   "stork",
+   "heron",
+   "swan",
+   "vulture",
+   "bluejay",
+   "cardinal",
+   "robin",
+   "finch",
+   "hummingbird",
+   "capybara",
+   "tapir",
+   "sloth",
+   "anteater",
+   "lemur",
+   "bunny",
+   "hare",
+   "calf",
+   "lamb",
+   "foal",
+   "cub",
+   "pup",
+   "kitten",
+   "piglet",
+   "chick"
+  ],
+  "fantasy_words": [
+   "cosmic",
+   "void",
+   "eldritch",
+   "ender",
+   "end",
+   "wraith",
+   "ghost",
+   "ghast",
+   "spirit",
+   "specter",
+   "spectre",
+   "phantom",
+   "wisp",
+   "demon",
+   "daemon",
+   "devil",
+   "imp",
+   "fiend",
+   "lich",
+   "undead",
+   "zombie",
+   "skeleton",
+   "ghoul",
+   "revenant",
+   "vampire",
+   "werewolf",
+   "banshee",
+   "dragon",
+   "drake",
+   "wyvern",
+   "wyrm",
+   "hydra",
+   "basilisk",
+   "griffin",
+   "gryphon",
+   "phoenix",
+   "unicorn",
+   "pegasus",
+   "chimera",
+   "kraken",
+   "golem",
+   "elemental",
+   "blaze",
+   "wither",
+   "warden",
+   "sculk",
+   "shulker",
+   "endermite",
+   "vex",
+   "evoker",
+   "illusioner",
+   "witch",
+   "wizard",
+   "mage",
+   "sorcerer",
+   "necromancer",
+   "fairy",
+   "faerie",
+   "pixie",
+   "sprite",
+   "nymph",
+   "dryad",
+   "ent",
+   "troll",
+   "ogre",
+   "goblin",
+   "kobold",
+   "orc",
+   "giant",
+   "titan",
+   "cyclops",
+   "minotaur",
+   "centaur",
+   "harpy",
+   "siren",
+   "mermaid",
+   "naga",
+   "gorgon",
+   "medusa",
+   "yeti",
+   "wendigo",
+   "eye",
+   "tentacle",
+   "abyssal",
+   "astral",
+   "celestial",
+   "nether",
+   "infernal",
+   "hellish",
+   "shade",
+   "shadow",
+   "umbral",
+   "arcane",
+   "rune",
+   "crystal",
+   "corrupted",
+   "tainted",
+   "taint",
+   "cursed",
+   "haunted",
+   "ancient",
+   "primordial",
+   "aberration",
+   "horror",
+   "nightmare",
+   "dream",
+   "beholder",
+   "mimic",
+   "slime",
+   "magma",
+   "strider",
+   "hoglin",
+   "piglin",
+   "zoglin",
+   "breeze",
+   "allay"
+  ],
+  "fantasy_aspects": {
+   "thaumaturge:praecantatio": 1.0,
+   "thaumaturge:alienis": 1.0,
+   "thaumaturge:exanimis": 1.0,
+   "thaumaturge:vitium": 1.0,
+   "thaumaturge:spiritus": 0.8,
+   "thaumadditions:infernum": 1.0,
+   "thaumadditions:draco": 1.0,
+   "thaumadditions:caeles": 0.8,
+   "madmans_dreams:somnium": 1.0,
+   "thaumaturge:auram": 0.8,
+   "thaumaturge:tenebrae": 0.4,
+   "thaumaturge:mortuus": 0.3
+  },
+  "traits": {
+   "#minecraft:undead": {
+    "thaumaturge:exanimis": 1.0,
+    "thaumaturge:mortuus": 0.6
+   },
+   "#minecraft:arthropod": {
+    "thaumaturge:bestia": 0.6
+   },
+   "#minecraft:illager": {
+    "thaumaturge:humanus": 1.0,
+    "thaumaturge:aversio": 0.4
+   },
+   "#minecraft:raiders": {
+    "thaumaturge:aversio": 0.5
+   },
+   "#minecraft:aquatic": {
+    "thaumaturge:aqua": 1.0
+   },
+   "#c:bosses": {
+    "thaumaturge:potentia": 0.6,
+    "thaumaturge:aversio": 0.4
+   },
+   "fire_immune": {
+    "thaumaturge:ignis": 0.8
+   },
+   "monster": {
+    "thaumaturge:aversio": 0.5
+   },
+   "water": {
+    "thaumaturge:aqua": 0.8
+   },
+   "ambient": {
+    "thaumaturge:volatus": 0.4
+   }
+  },
+  "_balance": "Targets: ordinary mobs reach 3-4 aspects, fantasy and other-dimension mobs 4-5, bosses 6-7, using only candidates with real support. Rarity scales additions (and, for guessed mobs, the whole total): bosses x2, structure-only spawns x1.5, rare spawns x1.3.",
+  "habitats": {
+   "_doc": "A landscape reading of each biome, blended with Thaumaturge's own biome aspects (its primal palette for aura nodes, at half weight). Biome tags in the c: namespace are shared by vanilla and modded biomes.",
+   "#c:is_snowy": {
+    "thaumaturge:gelum": 1.0
+   },
+   "#c:is_icy": {
+    "thaumaturge:gelum": 1.0
+   },
+   "#c:is_cold/overworld": {
+    "thaumaturge:gelum": 0.5
+   },
+   "#c:is_forest": {
+    "thaumaturge:herba": 1.0
+   },
+   "#c:is_jungle": {
+    "thaumaturge:herba": 1.0
+   },
+   "#c:is_dense_vegetation": {
+    "thaumaturge:herba": 0.6
+   },
+   "#c:is_lush": {
+    "thaumaturge:herba": 0.6,
+    "thaumaturge:victus": 0.4
+   },
+   "#c:is_floral": {
+    "thaumaturge:herba": 0.8
+   },
+   "#c:is_mushroom": {
+    "thaumaturge:herba": 0.8
+   },
+   "#c:is_aquatic": {
+    "thaumaturge:aqua": 1.0
+   },
+   "#c:is_beach": {
+    "thaumaturge:aqua": 0.5,
+    "thaumaturge:terra": 0.5
+   },
+   "#c:is_swamp": {
+    "thaumaturge:aqua": 0.6,
+    "thaumaturge:herba": 0.4
+   },
+   "#c:is_desert": {
+    "thaumaturge:ignis": 0.5,
+    "thaumaturge:terra": 0.5
+   },
+   "#c:is_hot/overworld": {
+    "thaumaturge:ignis": 0.6
+   },
+   "#c:is_badlands": {
+    "thaumaturge:terra": 0.7,
+    "thaumaturge:ignis": 0.3
+   },
+   "#c:is_mountain": {
+    "thaumaturge:terra": 0.6,
+    "thaumaturge:aer": 0.4
+   },
+   "#c:is_windswept": {
+    "thaumaturge:aer": 0.8
+   },
+   "#c:is_plains": {
+    "thaumaturge:terra": 0.6,
+    "thaumaturge:herba": 0.4
+   },
+   "#c:is_savanna": {
+    "thaumaturge:terra": 0.6,
+    "thaumaturge:ignis": 0.3
+   },
+   "#c:is_cave": {
+    "thaumaturge:terra": 0.8,
+    "thaumaturge:tenebrae": 0.4
+   },
+   "#c:is_underground": {
+    "thaumaturge:terra": 0.8,
+    "thaumaturge:tenebrae": 0.4
+   },
+   "#c:is_magical": {
+    "thaumaturge:praecantatio": 1.0
+   },
+   "#c:is_spooky": {
+    "thaumaturge:tenebrae": 0.8
+   },
+   "#c:is_dead": {
+    "thaumaturge:mortuus": 0.8
+   },
+   "#c:is_wasteland": {
+    "thaumaturge:perditio": 0.8
+   }
+  }
  }
 }

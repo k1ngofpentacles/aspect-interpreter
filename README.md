@@ -2,15 +2,13 @@
 
 An add-on for [Thaumaturge](https://www.curseforge.com/projects/1628024) on NeoForge 1.21.1. It gives **aspects to every item and entity that has none**, by interpreting each object's name, material, recipes and mob category against the patterns of the aspects your pack already assigns.
 
-It never replaces or reduces an existing aspect. It does two things:
+It never replaces or reduces an existing aspect. It does three things:
 
-- **Fills gaps:** it answers when Thaumaturge would otherwise have nothing.
-- **Adds what recipes can't:** Thaumaturge's recipe rule only conserves materials, so crafted items never gain aspects. Aspect Interpreter adds:
-  - **Function:** a barrel holds things, so it gets vacuos.
-  - **Craftsmanship:** stairs are shaped wood, so they get ordo.
-  - **Dimension:** everything from the Nether, the End or another world gets a touch of alienis and that world's flavour. This is the only addition hand-written entries receive.
+- **Fills gaps:** it answers when Thaumaturge would otherwise have nothing, including what the item is for (a barrel holds things, so it gets vacuos).
+- **Enriches mobs:** mobs are the richest source of aspects and the hardest to process. Each mob gains aspects from where it lives (a stray gets gelum), the dimension it comes from (a ghast gets infernum and spiritus; End mobs get alienis), how it behaves (undead get mortuus) and what it drops. Fantasy creatures gain more than ordinary animals, and bosses and rare mobs carry larger totals.
+- **Credits craftsmanship:** crafted items from other mods, made at the crafting table, gain ordo or fabrico for each step beyond the first.
 
-Every addition is sized to match how sparingly the original mods use each aspect.
+Hand-written aspects are canon. Vanilla, Thaumaturge and its add-ons, Create and its add-ons, and any mod that ships its own aspect files are learned from but never added to, except that their mobs are enriched. Every addition is sized to match how sparingly the original mods use each aspect.
 
 ## Requirements
 - Minecraft 1.21.1
@@ -31,8 +29,7 @@ The model reads what your pack already does and applies the same pattern to the 
 - **Word profiles:** the aspect mix the pack associates with each word in the name.
 - **Meaning:** a table of what each aspect means, with each word's weight calibrated against your pack's own assignments.
 - **Physical evidence:** recipes of any type, block material, food, tool or armour data, and mob category and size.
-- **How it was made:** each crafting step beyond the first refinement adds craftsmanship of its kind (ordo for regular forms, machina for machine work, fabrico for assembly).
-- **Where it comes from:** the dimension an object spawns, generates or drops in. Each dimension's character is learned from its already-assigned natives, so an End fish picks up a little alienis.
+- **Where a mob comes from:** its biomes, its dimension, its behaviour and its drops. The Nether is treated as an underworld rather than an alien world, so its natives get infernum, not alienis. Items that come from a mob of another dimension (an End fish, its bucket) share its flavour; blocks never do.
 
 [`docs/ALGORITHM.md`](docs/ALGORITHM.md) has the full method and measured accuracy. [`docs/PHILOSOPHY.md`](docs/PHILOSOPHY.md) explains how Thaumaturge and its add-ons assign aspects, and how each rule here follows from that. On held-out items from the author's pack, it picked the right main aspect about 73% of the time.
 
@@ -43,9 +40,11 @@ The config file is `config/aspect_interpreter.json`:
 |---|---|---|
 | `items` / `entities` | `true` | Turn either half off |
 | `learnFromThaumaturgeCache` | `true` | Also learn from Thaumaturge's resolved index, excluding this mod's own guesses |
-| `functionLayer` | `true` | Add a missing function aspect (container → vacuos, lamp → lux...) |
-| `craftingComplexity` | `true` | Add craftsmanship to recipe-derived items |
-| `dimensionContext` | `true` | Use the dimension an object comes from as evidence |
+| `mobEnrichment` | `true` | Enrich mobs from habitat, dimension, behaviour and drops |
+| `canonNamespaces` | vanilla, Thaumaturge family, Create family | Mods that are only read, never added to (hand-writing mods are detected automatically) |
+| `functionLayer` | `true` | Add a missing function aspect to interpreted items |
+| `craftingComplexity` | `true` | Add craftsmanship to crafting-table items of non-canon mods |
+| `dimensionContext` | `true` | Use the dimension a mob comes from |
 | `baselineDimensions` | `["minecraft:overworld"]` | Dimensions with no special character |
 | `dimensionAspects` | `{}` | Pin a dimension's signature, e.g. `{"minecraft:the_end": {"thaumaturge:alienis": 1.0}}` |
 | `minConfidence` | `0.15` | Guesses below this confidence are left unassigned |

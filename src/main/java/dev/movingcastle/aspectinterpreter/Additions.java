@@ -14,16 +14,19 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Applies the additive layers in a fixed order, and records what each added.
+ * Where the additive layers may act, and a record of what each added. Nothing is ever removed or reduced.
  *
- * <ol>
- *   <li><b>Dimension</b>: alienis plus the dimension's top flavour, for objects native to a non-Overworld
- *       dimension. The only layer that touches hand-written entries.</li>
- *   <li><b>Function</b>: one missing function aspect, from the name's head (container &rarr; vacuos).</li>
- *   <li><b>Craftsmanship</b>: ordo / machina / fabrico for crafting steps beyond the first refinement.</li>
- * </ol>
- * Nothing is ever removed or reduced. Function and craftsmanship stop once an object has {@value #MAX_FOR_EXTRAS}
- * aspects, the original layer's practical ceiling (5 or more aspects is about 1% of hand-written items).
+ * <ul>
+ *   <li><b>Mobs</b> ({@link MobEnrichment}): habitat, dimension, behaviour and drops. The only layer that adds to
+ *       hand-written entries.</li>
+ *   <li><b>Craftsmanship</b> ({@link CraftComplexity}): items of non-canon mods made at the crafting table, whether
+ *       Thaumaturge derived them or the interpreter guessed them.</li>
+ *   <li><b>Function</b> ({@link FunctionLayer}): only items the interpreter fills in.</li>
+ *   <li><b>Dimension</b> ({@link DimensionContext}): only filled-in items that come from a mob of another
+ *       dimension (its drops, its bucket, its egg). Blocks and canon items never get it.</li>
+ * </ul>
+ * Function and craftsmanship stop once an item has {@value #MAX_FOR_EXTRAS} aspects, the original layer's
+ * practical ceiling (5 or more aspects is about 1% of hand-written items).
  */
 public final class Additions {
     private Additions() {}
@@ -32,12 +35,13 @@ public final class Additions {
     private static final Map<String, String> LOG = new ConcurrentHashMap<>();
     private static final Map<String, String> ENTITY_LOG = new ConcurrentHashMap<>();
     private static final Map<String, Integer> COUNTS = new ConcurrentHashMap<>();
+    private static final Map<String, Integer> ENTITY_COUNTS = new ConcurrentHashMap<>();
 
     /** Start of an item index build. */
     static void clear() { LOG.clear(); COUNTS.clear(); }
 
     /** Start of an entity warm-up. */
-    static void clearEntities() { ENTITY_LOG.clear(); }
+    static void clearEntities() { ENTITY_LOG.clear(); ENTITY_COUNTS.clear(); }
 
     static Set<String> itemIds() { return new HashSet<>(LOG.keySet()); }
 
@@ -48,69 +52,52 @@ public final class Additions {
     }
 
     static String summary() {
-        return String.format(Locale.ROOT, "dimension %d, function %d, craftsmanship %d",
-                COUNTS.getOrDefault("dimension", 0), COUNTS.getOrDefault("function", 0), COUNTS.getOrDefault("craftsmanship", 0));
+        return String.format(Locale.ROOT, "craftsmanship %d, function %d, mob-drop dimension %d",
+                COUNTS.getOrDefault("craftsmanship", 0), COUNTS.getOrDefault("function", 0), COUNTS.getOrDefault("dimension", 0));
     }
 
-    /** Hand-written base entries (called from the collectBase mixin): dimension only. */
-    public static AspectList forAuthored(Item item, AspectList list, HolderLookup.Provider registries) {
-        String id = BuiltInRegistries.ITEM.getKey(item).toString();
-        if (Config.get().excluded(id)) return list;
-        Map<String, Integer> plan = new LinkedHashMap<>();
-        layer(plan, "dimension", id, DimensionContext.additions(id, false, present(list), list.totalAmount()));
-        return apply(id, list, plan, registries);
+    static String entitySummary() {
+        return String.format(Locale.ROOT, "%d hand-written mobs enriched, %d guessed mobs enriched",
+                ENTITY_COUNTS.getOrDefault("real", 0), ENTITY_COUNTS.getOrDefault("guess", 0));
     }
 
-    /** Recipe-derived items (called from the crafting mixin): all three layers. */
+    /** Recipe-derived items (called from the crafting mixin): craftsmanship only, and only for non-canon table crafts. */
     public static AspectList forDerived(Item item, AspectList list, HolderLookup.Provider registries) {
         String id = BuiltInRegistries.ITEM.getKey(item).toString();
-        if (Config.get().excluded(id)) return list;
-        Set<String> present = present(list);
-        int total = list.totalAmount();
+        if (Config.get().excluded(id) || Canon.isCanon(id)) return list;
+        if (list.entries().size() >= MAX_FOR_EXTRAS) return list;
         Map<String, Integer> plan = new LinkedHashMap<>();
-        layer(plan, "dimension", id, DimensionContext.additions(id, false, present, total));
-        extras(plan, item, id, present, total);
-        return apply(id, list, plan, registries);
+        Map<String, Integer> craft = new LinkedHashMap<>(CraftComplexity.craftsmanship(item, list.totalAmount()));
+        craft.keySet().removeAll(present(list));
+        layer(plan, "craftsmanship", id, craft);
+        return apply(list, plan, registries);
     }
 
-    /** Interpreted items: all three layers, merged into the guess. */
+    /** Interpreted items: mob-drop dimension, function and craftsmanship, merged into the guess. */
     static void forGuess(Item item, String id, LinkedHashMap<String, Integer> aspects) {
         int total = 0;
         for (int x : aspects.values()) total += x;
         Map<String, Integer> plan = new LinkedHashMap<>();
-        layer(plan, "dimension", id, DimensionContext.additions(id, false, aspects.keySet(), total));
-        Set<String> present = new HashSet<>(aspects.keySet());
-        present.addAll(plan.keySet());
-        extras(plan, item, id, present, total);
+        layer(plan, "dimension", id, DimensionContext.dropAdditions(id, aspects.keySet(), total));
+        Set<String> now = new HashSet<>(aspects.keySet());
+        now.addAll(plan.keySet());
+        if (now.size() < MAX_FOR_EXTRAS) {
+            Map<String, Integer> fn = FunctionLayer.additions(id, now, total);
+            layer(plan, "function", id, fn);
+            now.addAll(fn.keySet());
+        }
+        if (now.size() < MAX_FOR_EXTRAS) {
+            Map<String, Integer> craft = new LinkedHashMap<>(CraftComplexity.craftsmanship(item, total));
+            craft.keySet().removeAll(now);
+            layer(plan, "craftsmanship", id, craft);
+        }
         plan.forEach((a, x) -> aspects.merge(a, x, Integer::sum));
     }
 
-    /** Entities with real entity_aspects: dimension only. Returns null when nothing is added. */
-    static Map<String, Integer> forRealEntity(String id, Map<String, Integer> real) {
-        int total = 0;
-        for (int x : real.values()) total += x;
-        Map<String, Integer> plan = new LinkedHashMap<>();
-        Map<String, Integer> add = DimensionContext.additions(id, true, real.keySet(), total);
-        if (add.isEmpty()) return null;
-        plan.putAll(add);
-        StringJoiner j = new StringJoiner(" ");
-        add.forEach((a, x) -> j.add("+" + a.replace("thaumaturge:", "") + " " + x));
-        ENTITY_LOG.put(id, "dimension: " + j);
-        Map<String, Integer> out = new LinkedHashMap<>(real);
-        plan.forEach((a, x) -> out.merge(a, x, Integer::sum));
-        return out;
-    }
-
-    private static void extras(Map<String, Integer> plan, Item item, String id, Set<String> present, int total) {
-        Set<String> now = new HashSet<>(present);
-        now.addAll(plan.keySet());
-        if (now.size() >= MAX_FOR_EXTRAS) return;
-        Map<String, Integer> fn = FunctionLayer.additions(id, now, total);
-        layer(plan, "function", id, fn);
-        now.addAll(fn.keySet());
-        if (now.size() >= MAX_FOR_EXTRAS) return;
-        Map<String, Integer> craft = new LinkedHashMap<>(CraftComplexity.craftsmanship(item, total));
-        layer(plan, "craftsmanship", id, craft);
+    /** Called by {@link MobEnrichment} for every mob it adds to. */
+    static void entity(String id, boolean real, String note) {
+        ENTITY_LOG.put(id, note);
+        ENTITY_COUNTS.merge(real ? "real" : "guess", 1, Integer::sum);
     }
 
     private static void layer(Map<String, Integer> plan, String name, String id, Map<String, Integer> add) {
@@ -118,8 +105,12 @@ public final class Additions {
         add.forEach((a, x) -> plan.merge(a, x, Integer::sum));
         COUNTS.merge(name, 1, Integer::sum);
         StringJoiner j = new StringJoiner(" ");
-        add.forEach((a, x) -> j.add("+" + a.replace("thaumaturge:", "") + " " + x));
+        add.forEach((a, x) -> j.add("+" + shortName(a) + " " + x));
         LOG.merge(id, name + ": " + j, (o, n) -> o.contains(name + ":") ? o : o + "; " + n);
+    }
+
+    static String shortName(String aspect) {
+        return aspect.substring(aspect.indexOf(':') + 1);
     }
 
     private static Set<String> present(AspectList list) {
@@ -129,7 +120,7 @@ public final class Additions {
     }
 
     /** Adds each planned aspect to the original list; existing entries are never changed except by addition. */
-    private static AspectList apply(String id, AspectList list, Map<String, Integer> plan, HolderLookup.Provider registries) {
+    private static AspectList apply(AspectList list, Map<String, Integer> plan, HolderLookup.Provider registries) {
         if (plan.isEmpty()) return list;
         Optional<? extends HolderLookup.RegistryLookup<IAspect>> lookup = registries.lookup(InterpreterContributor.ASPECT_REGISTRY);
         if (lookup.isEmpty()) return list;

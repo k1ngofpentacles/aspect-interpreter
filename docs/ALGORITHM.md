@@ -1,6 +1,8 @@
 # Aspect Interpreter: how it assigns aspects
 
-Aspect Interpreter is a NeoForge 1.21.1 add-on for Thaumaturge 1.1+. It gives aspects to any item or entity type that has none, and adds what Thaumaturge's recipe rule can't (function, craftsmanship, dimension) to existing assignments. Nothing is ever removed or reduced. Hand-written (`base_aspects` / `entity_aspects`) entries only ever receive dimension additions.
+Aspect Interpreter is a NeoForge 1.21.1 add-on for Thaumaturge 1.1+. It gives aspects to any item or entity type that has none, and enriches mobs, which are the richest source of aspects and the place where habitat and dimension flavour belong. Nothing is ever removed or reduced.
+
+Additions are balanced along three axes: how rare an aspect is, how scarce the resource is, and how much processing it takes. Hand-written item entries are never added to. Hand-written mob entries receive mob enrichment as additions only. Crafted items of non-canon mods made at the crafting table get craftsmanship; nothing else in the original index changes.
 
 The reasoning behind each rule, drawn from Thaumaturge's own data, is in [`PHILOSOPHY.md`](PHILOSOPHY.md).
 
@@ -8,10 +10,9 @@ The reasoning behind each rule, drawn from Thaumaturge's own data, is in [`PHILO
 
 | Target | Hook | What it changes |
 |---|---|---|
-| Hand-written items | Mixin on the return of `AspectIndexBuilder.collectBase` | Adds dimension aspects (alienis + flavour) to natives of non-Overworld dimensions before recipes resolve, so they flow on to crafted items. Optional. |
-| Recipe-derived items | Mixin on the return of Thaumaturge's `CraftingAspectContributor.derive` | Adds dimension, function and craftsmanship after Thaumaturge has derived an item from a crafting recipe. Optional: it turns itself off if Thaumaturge changes. |
+| Recipe-derived items | Mixin on the return of Thaumaturge's `CraftingAspectContributor.derive` | Adds craftsmanship to items of non-canon mods made at the crafting table. Optional: it turns itself off if Thaumaturge changes. |
 | Items | `IAspectRecipeContributor` registered through `RegisterAspectContributorsEvent` | Thaumaturge asks contributors in order and keeps the first non-empty answer. Event contributors run after its own crucible, infusion, crafting and cooking contributors, so this one is only asked about items with no base aspects and no recipe Thaumaturge could resolve. |
-| Entities | Mixin on the return of `EntityAspects.of(EntityType)` | Every entity read (scanning, goggles, wand charging, nodes, liquid death, infusion enchantments) goes through this method. It returns a guess for unassigned types, or the real entry plus dimension additions for natives of other dimensions. |
+| Entities | Mixin on the return of `EntityAspects.of(EntityType)` | Every entity read (scanning, goggles, wand charging, nodes, liquid death, infusion enchantments) goes through this method. It returns a guess for unassigned types, or the real entry plus mob enrichment. |
 
 Thaumaturge resolves recipes recursively. So when the interpreter fills in a leaf item, Thaumaturge's own recipe logic can then finish every item crafted from it.
 
@@ -46,30 +47,70 @@ A separate list of neutral words (colours, shapes, sizes) is ignored for meaning
 | Recipes (items) | Any recipe type producing the item whose ingredients resolve (≥50%), at 75% of the inputs. | 2.0 × fraction resolved |
 | Material (items) | Block sound type (wood, stone, metal, glass, wool...), light level, food, tool, attack damage, armour, fire resistance | up to 0.8 |
 | Creature (spawn eggs) | The entity's real or interpreted aspects, plus victus | 1.2 |
-| Dimension | alienis plus the flavours of the dimension the object comes from (see below) | 0.5 × share of the object's association with that dimension |
+| Dimension (items from mobs) | the signature of the dimension a mob comes from, for its drops and items named after it (see below) | 0.5 × share of the item's association with that dimension |
 | Category (entities) | Learned from the pack's own `entity_aspects` per mob category (only aspects at least 40% of members share), falling back to monster → aversio/bestia; creature → bestia/terra; water → aqua/bestia; ambient → bestia/volatus/tenebrae; fire immunity adds a little ignis, for living creatures only; non-living entities (boats, minecarts, arrows, projectiles) are read as the item they are or most resemble | 0.7 (item match 1.5) |
 
 **3. Blend.** Take the weighted average of the distributions. When close neighbours exist (similarity ≥ 0.5), keep about as many aspects as they carry. Otherwise keep aspects holding at least 8% of the mass, up to 4. Both settings were tuned to the original layer's balance; see `PHILOSOPHY.md` section 6.
 
-**4. Size the amount.** Use the neighbours' typical total, else the word profiles' median, else 8 for items. For entities, use 25 scaled by body volume.
+**4. Size the amount.** Use the neighbours' typical total, else the word profiles' median, else 8 for items. For entities, use 25 scaled by body volume, then multiplied by the mob's rarity (see Mob enrichment).
 
 **5. Score confidence.** Confidence = total evidence weight ÷ 2, capped at 1. Below `minConfidence` (default 0.15), the ID is left unassigned.
 
 **6. Check the aspects exist.** Aspects the running pack doesn't define (for example, an addon aspect seen in a data map of a mod that is not loaded) are dropped, and the rest are rescaled.
 
-**7. Additions.** The guess then receives the additive layers below, in order: dimension, function, craftsmanship.
+**7. Additions.** An item guess then receives the item layers below. An entity guess goes through mob enrichment.
 
 ## Additive layers
 
-These add to existing assignments and to guesses. Nothing is ever removed or reduced.
+Nothing is ever removed or reduced.
 
 | Layer | Applies to | Adds |
 |---|---|---|
-| Dimension | everything, including hand-written entries and real creatures | alienis and the dimension's top flavour, for natives of non-Overworld dimensions |
-| Function | recipe-derived and interpreted items | one missing function aspect named by the head of the name (container → vacuos, lamp → lux...), checked against hand-written items |
-| Craftsmanship | recipe-derived and interpreted items | ordo, machina or fabrico for crafting steps beyond the first refinement |
+| Mob enrichment | every mob, hand-written or guessed | habitat, dimension, behaviour and drop aspects (see below) |
+| Craftsmanship | items of non-canon mods made at the crafting table, derived or guessed | ordo or fabrico for crafting steps beyond the first refinement |
+| Function | interpreted items only | one missing function aspect named by the head of the name (container → vacuos, lamp → lux...), checked against hand-written items |
+| Dimension | interpreted items that come from a mob of another dimension (its drops, bucket, egg) | the dimension's guaranteed aspects |
 
-Each addition is sized like a minor aspect in the original layer: the aspect's median minor share in the pack, capped at 20%. Function and craftsmanship stop once an item has 5 aspects.
+Item additions are sized like a minor aspect in the original layer: the aspect's median minor share in the pack, capped at 20%. They stop once an item has 5 aspects. Blocks never receive dimension aspects.
+
+## Canon
+
+Hand-written aspects are canon: the interpreter learns from them but never adds to the items of a canon mod. Canon mods are:
+
+- **Configured:** vanilla, Thaumaturge and its add-ons, Create and its add-ons (`canonNamespaces`; a trailing `*` matches a prefix).
+- **Detected:** any mod that ships its own Thaumaturge aspect files. Every loaded pack's `base_aspects` and `entity_aspects` files are read at startup, so a newly installed add-on that hand-writes aspects is recognised without configuration. A mod that hand-writes at least 25% of another mod's items makes that mod canon too. The hand-writing packs found are logged.
+
+## Mob enrichment
+
+Mobs should be the most aspect-rich source, and the hardest to process. So variety, and dimension flavour, belong on them. Every mob, with a hand-written entry or a guess, is enriched from four sources:
+
+| Source | Reads | Weight |
+|---|---|---|
+| Habitat | The biomes the mob spawns in, by spawn weight. Each biome's landscape (from `c:` biome tags: snowy → gelum, forest and jungle → herba, ocean and river → aqua, desert → ignis/terra...) is blended with Thaumaturge's own biome aspects at half weight. Thaumaturge's are a primal palette for aura nodes (cold biomes are ordo, plains aer), so they decide only where the landscape says nothing. | 0.5 + 0.5 × fantasy |
+| Dimension | For mobs at least 60% native to another dimension: alienis (none for underworlds) and the lead flavour, always; pool flavours only if the mob's name, traits or drops support them | 0.5 + 0.5 × fantasy |
+| Behaviour | Entity tags and properties: undead → exanimis/mortuus, arthropod → bestia, illager → humanus/aversio, raider → aversio, aquatic → aqua, fire-immune → ignis, hostile → aversio, boss → potentia/aversio | 0.6 |
+| Drops | The mean aspect mix of its loot table's items | 0.4 |
+
+**Fantasy score (0–1).** Starts at 0.3. A real-animal name (cow, wolf, cod...) lowers it by 0.5. It rises with a fantasy word in the name (cosmic, void, wraith, golem...) by 0.4, being native to another dimension by 0.4, undeath by 0.2, boss status by 0.2, and fantasy aspects in its mix (praecantatio, alienis, exanimis, vitium, infernum...) by up to 0.6. Habitat and dimension weigh more on fantasy mobs.
+
+**Dimensions.**
+
+| Dimension | Always | May add, when it suits the mob |
+|---|---|---|
+| Nether (an underworld: no alienis) | infernum (ignis without Thaumic Additions) | ignis, exanimis, mortuus, spiritus |
+| End | alienis, vacuos | tenebrae |
+| Otherside | alienis, tenebrae | praecantatio, sensus |
+| Unlisted | alienis, learned lead flavour | the rest of its learned flavours |
+
+So a ghast takes infernum and spiritus, a zombified piglin infernum and mortuus, and a strider only infernum.
+
+**Counts.** Candidates scoring at least 0.2 are added up to a ceiling; weaker candidates (at least 0.08) only fill up to a floor. Ordinary mobs: 3–4 aspects. Fantasy and other-dimension mobs: 4–5. Bosses (the `c:bosses` tag, or 150+ health): 6–7.
+
+**Rarity.** Bosses ×2, structure-only spawns ×1.5, rare spawns (spawn weight ≤ 5 or 2 biomes or fewer) ×1.3, others ×1. For hand-written mobs this scales only the additions; the original amounts stay exactly as written. For guessed mobs it scales the whole total.
+
+**Amounts and balance.** Each addition is the aspect's minor share × the mob's total × rarity, scaled by how well supported it is. The additions together are capped at 30–45% of that (by fantasy score), or 40% for bosses. The weakest are dropped first; dimension guarantees are kept.
+
+On vanilla's 87 hand-written mobs this takes the mean from 2.9 to 3.7 aspects and the mean total from 27 to 31. The report lists every mob's fantasy score, rarity and each addition with its source.
 
 ## Function layer
 
@@ -81,46 +122,25 @@ Thaumaturge's authors write function into key items by hand (a chest is vacuos, 
 
 ## Dimension context
 
-Some meaning comes from where a thing comes from: a cod from the End should be a little alien, whatever its name says. At each server start and reload, the mod reads, for every dimension:
+At each server start and reload, the mod reads, for every dimension:
 
-- **Creatures:** which ones its biomes spawn, and which ones its structures spawn (via spawn overrides).
-- **Blocks:** which ones its terrain and world features place, found by walking each feature's encoded configuration, including nested features.
-- **Items:** which ones those creatures drop (their loot tables), and which ones are named after them (`cosmic_cod_bucket`, `spawn_egg_cosmic_cod`).
+- **Creatures:** which ones its biomes spawn (and in which biomes, how often), and which ones its structures spawn (via spawn overrides).
+- **Items from creatures:** what every mob drops (its loot table), and which items are named after a mob (`cosmic_cod_bucket`, `spawn_egg_cosmic_cod`).
+- **Blocks:** which ones its terrain and features place. These are used only to learn what an unlisted dimension is like; blocks never receive dimension aspects.
 
-Each object gets a share per dimension. The Overworld is the baseline (configurable) and carries no meaning of its own.
-
-**Every other dimension is alien.** Its signature is **alienis** plus up to two flavours:
-
-| Dimension | Flavours |
-|---|---|
-| Nether | infernum (with Thaumic Additions), ignis |
-| End | vacuos, tenebrae |
-| Otherside (Deeper and Darker) | tenebrae, praecantatio |
-| Unlisted | learned from the dimension's natives, else matched from its name |
-
-An object at least 60% native to such a dimension gets alienis and the top available flavour if it lacks them. That includes hand-written items and real creatures.
-
-**Learned flavours.** For dimensions the lexicon doesn't list, flavours are learned from already-assigned natives: aspects at least 3× over-represented and at least 5% of the mix, with families of variants counted once. `dimensionAspects` in the config can set any dimension's flavours by hand. The resulting signatures are logged at startup.
+The Overworld is the baseline (configurable) and carries no meaning of its own. Every other dimension is alien, except **underworlds** (the Nether: this world's below, not an outer world). Signatures and pools are in `lexicon.json` under `dimensions`. For dimensions it doesn't list, flavours are learned from already-assigned natives: aspects at least 3× over-represented and at least 5% of the mix, with families of variants counted once. `dimensionAspects` in the config can set any dimension's flavours by hand. The resulting signatures are logged at startup.
 
 ## Crafting complexity
 
-Thaumaturge's recipe rule conserves material, so crafted items never gain aspects and usually lose some (oak stairs are herba 5, like planks). Its authors add workmanship by hand instead, on key items. This layer extends that intent to every recipe-derived item, including Thaumaturge's own derivations.
+Thaumaturge's recipe rule conserves material, so crafted items never gain aspects and usually lose some (oak stairs are herba 5, like planks). Its authors add workmanship by hand instead, on key items. This layer extends that intent, but only to items of non-canon mods that are made at the vanilla crafting table.
 
 **Depth.** An item's depth is the number of steps from raw material. Hand-assigned and recipe-less items are 0; otherwise depth is 1 plus the deepest input of the item's shallowest recipe. The first step is a refinement (log → planks, ore → ingot) and adds nothing.
 
-**Kind.** Each further step adds craftsmanship of one kind, chosen by the item's simplest recipe:
+**Kind.** Each further step adds **ordo** if the result's name is a regular shape (stairs, slab, wall, brick...), otherwise **fabrico**.
 
-| Kind | When | Aspect |
-|---|---|---|
-| Form | Stonecutting, or the result's name is a regular shape (stairs, slab, wall, brick...) | ordo |
-| Machine | A machine recipe type (`create:*`, `forestry:*`...) | machina |
-| Assembly | Anything else | fabrico |
+**Amount.** About 6% of the item's material per step, at least 1, capped at 30%.
 
-Cooking and Thaumaturge's magical recipes add none.
-
-**Amount.** About 6% of the item's material per step, at least 1, capped at 30%. Additions flow downstream through Thaumaturge's own ×0.75 rule, so variety builds up along recipe chains.
-
-The shape words, machine recipe types and percentages are all editable in `lexicon.json` under `craftsmanship`. Set `craftingComplexity: false` in the config to turn the layer off.
+The shape words and percentages are editable in `lexicon.json` under `craftsmanship`. Set `craftingComplexity: false` to turn the layer off.
 
 ## Where it learns from
 
@@ -141,7 +161,7 @@ The test, run during development on the author's 10,595-item pack, hides 20% of 
 
 ## Config: `config/aspect_interpreter.json`
 
-`items`, `entities`, `learnFromThaumaturgeCache`, `functionLayer`, `craftingComplexity`, `dimensionContext`, `baselineDimensions`, `dimensionAspects`, `minConfidence`, `writeReport`, `excludedNamespaces`, `excludedIds`, `excludedWords`.
+`items`, `entities`, `learnFromThaumaturgeCache`, `mobEnrichment`, `canonNamespaces`, `functionLayer`, `craftingComplexity`, `dimensionContext`, `baselineDimensions`, `dimensionAspects`, `minConfidence`, `writeReport`, `excludedNamespaces`, `excludedIds`, `excludedWords`.
 
 After each reload, every guess, and every addition with the layer that made it, is written to `config/aspect_interpreter/assignments.txt`. To override a guess, give the object a real `base_aspects` or `entity_aspects` entry; real entries always win.
 
@@ -150,7 +170,8 @@ After each reload, every guess, and every addition with the layer that made it, 
 All of the work happens once, inside Thaumaturge's own index build, and Thaumaturge caches the result to `config/thaumaturge/aspect_index.json`. Later launches load that cache and cost nothing.
 
 - **Learning:** about 50–150 ms each time data maps load.
-- **Dimension context:** computed once per server start or reload, before the index build. It reads each dimension's biomes, features and creature loot tables once; the time it took is logged.
+- **Canon and dimension context:** computed once per server start or reload, before the index build. They read each pack's aspect files, each dimension's biomes and features, and every mob's loot table once; the time is logged.
+- **Mob enrichment:** part of the entity warm-up, once per start or reload.
 - **Item guesses:** about 0.2 ms each. Each item's guess is reused across Thaumaturge's two resolution passes.
 - **Recipe evaluation:** capped at 4 recipes per item and 2 options per ingredient.
 - **Entities:** every entity type is pre-guessed once on the server at startup and after reloads. The finished table is sent to each player when they join (a few kilobytes), so clients never compute guesses and always agree with the server. The per-frame lookup from Thaumaturge's goggles overlay is a pure table read.
