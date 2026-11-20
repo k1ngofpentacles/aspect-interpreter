@@ -66,6 +66,26 @@ final class ItemFeatures {
             MATERIAL.put(s, T + "tenebrae");
     }
 
+    /**
+     * What sort of thing an item is, for family comparisons: "block:" plus its material (or "other"), "food",
+     * "gear" (tools, weapons, armour) or "item".
+     */
+    static String kind(Item item) {
+        try {
+            if (item instanceof BlockItem bi) {
+                String m = MATERIAL.get(bi.getBlock().defaultBlockState().getSoundType());
+                return "block:" + (m == null ? "other" : m.substring(m.indexOf(':') + 1));
+            }
+            DataComponentMap c = item.components();
+            if (c.has(DataComponents.FOOD)) return "food";
+            if (c.has(DataComponents.TOOL) || item instanceof ArmorItem) return "gear";
+            ItemAttributeModifiers mods = c.get(DataComponents.ATTRIBUTE_MODIFIERS);
+            if (mods != null) for (ItemAttributeModifiers.Entry e : mods.modifiers())
+                if (e.attribute().equals(Attributes.ATTACK_DAMAGE) && e.modifier().amount() >= 2) return "gear";
+        } catch (Throwable ignored) {}
+        return "item";
+    }
+
     /** One combined source; weight scales with how much physical information was found. */
     static Model.Source of(Item item) {
         Map<String, Double> d = new HashMap<>();

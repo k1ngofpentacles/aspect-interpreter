@@ -2,7 +2,7 @@
 
 Aspect Interpreter is a NeoForge 1.21.1 add-on for Thaumaturge 1.1+. It gives aspects to any item or entity type that has none, and enriches mobs, which are the richest source of aspects and the place where habitat and dimension flavour belong. Nothing is ever removed or reduced.
 
-Additions are balanced along three axes: how rare an aspect is, how scarce the resource is, and how much processing it takes. Hand-written item entries are never added to. Hand-written mob entries receive mob enrichment as additions only. Crafted items of non-canon mods made at the crafting table get craftsmanship; nothing else in the original index changes.
+Additions are balanced along three axes: how rare an aspect is, how scarce the resource is, and how much processing it takes. Hand-written item entries are never added to. Hand-written mob entries receive mob enrichment as additions only. Crafted items gain the key aspects their hand-written family members share (family consistency). Crafted items of non-canon mods made at the crafting table also get craftsmanship. Nothing else in the original index changes.
 
 The reasoning behind each rule, drawn from Thaumaturge's own data, is in [`PHILOSOPHY.md`](PHILOSOPHY.md).
 
@@ -10,7 +10,7 @@ The reasoning behind each rule, drawn from Thaumaturge's own data, is in [`PHILO
 
 | Target | Hook | What it changes |
 |---|---|---|
-| Recipe-derived items | Mixin on the return of Thaumaturge's `CraftingAspectContributor.derive` | Adds craftsmanship to items of non-canon mods made at the crafting table. Optional: it turns itself off if Thaumaturge changes. |
+| Recipe-derived items | Mixin on the return of Thaumaturge's `CraftingAspectContributor.derive` | Adds family key aspects to any crafted item, and craftsmanship to items of non-canon mods made at the crafting table. Optional: it turns itself off if Thaumaturge changes. |
 | Items | `IAspectRecipeContributor` registered through `RegisterAspectContributorsEvent` | Thaumaturge asks contributors in order and keeps the first non-empty answer. Event contributors run after its own crucible, infusion, crafting and cooking contributors, so this one is only asked about items with no base aspects and no recipe Thaumaturge could resolve. |
 | Entities | Mixin on the return of `EntityAspects.of(EntityType)` | Every entity read (scanning, goggles, wand charging, nodes, liquid death, infusion enchantments) goes through this method. It returns a guess for unassigned types, or the real entry plus mob enrichment. |
 
@@ -67,11 +67,28 @@ Nothing is ever removed or reduced.
 | Layer | Applies to | Adds |
 |---|---|---|
 | Mob enrichment | every mob, hand-written or guessed | habitat, dimension, behaviour and drop aspects (see below) |
+| Family consistency | crafted and interpreted items of any mod (never hand-written ones) | up to 2 key aspects that the item's hand-written relatives share; lux for bright light sources (see below) |
 | Craftsmanship | items of non-canon mods made at the crafting table, derived or guessed | ordo or fabrico for crafting steps beyond the first refinement |
 | Function | interpreted items only | one missing function aspect named by the head of the name (container → vacuos, lamp → lux...), checked against hand-written items |
 | Dimension | interpreted items that come from a mob of another dimension (its drops, bucket, egg) | the dimension's guaranteed aspects |
 
 Item additions are sized like a minor aspect in the original layer: the aspect's median minor share in the pack, capped at 20%. They stop once an item has 5 aspects. Blocks never receive dimension aspects.
+
+## Family consistency
+
+Thaumaturge's recipe rule loses an object's defining aspect when no ingredient carries it. Vanilla candles are hand-written lux 5, but Forestry's big and jumbo candles and Thaumaturge's own coloured candles are crafted from wax, string and dye, so they came out with no lux. This layer makes similar items agree on 1–2 key aspects.
+
+**Family.** An item's family is its head noun: the last word of its name that names a kind of thing, after colour, size, material and shaping words (`cut`, `polished`, `roasted`...; editable under `families` in `lexicon.json`). A word counts as a head noun only if, across the pack, it ends at least half the names it appears in. A trailing modifier is skipped (`jumbo_candle_refractory` is a candle). A rare head noun gives no family at all (`potato_cannon` is not a potato).
+
+**Who defines the keys.** Hand-written members in the item's own mod first (at least 2). Otherwise hand-written members across the pack (at least 3, from two mods or including vanilla). Crafted members never define keys.
+
+**Key aspects.** Up to 2 aspects carried by at least 60% of those members. An aspect a member's modifier words explain doesn't count (chorus fruit's alienis comes from "chorus", not from "fruit").
+
+**Same kind.** Members only learn from anchors of the same kind, or anchors that share an item tag with them. Kinds are: a block of the same material (by block sound), food, gear (tools, weapons, armour), or any other item. A music disc doesn't learn from chicken meat, and a bee frame doesn't learn from an item frame.
+
+**Light.** A real light source is a block that shines at 10+ as placed, or that is lit by hand (a `lit` state and no block entity) and shines that bright when lit. That includes candles, candle holders and redstone lamps, but not furnaces. If at least half the pack's hand-written light sources carry lux, every crafted or interpreted light source gets it too. Faint glows don't count (brewing stand, magma block, dragon egg), and in the hand-written data none of them carry lux.
+
+**Amount.** Each key is sized to its median share among the anchors, at most the item's largest existing aspect. All family additions together are capped at half the item's original total.
 
 ## Canon
 
@@ -161,7 +178,7 @@ The test, run during development on the author's 10,595-item pack, hides 20% of 
 
 ## Config: `config/aspect_interpreter.json`
 
-`items`, `entities`, `learnFromThaumaturgeCache`, `mobEnrichment`, `canonNamespaces`, `functionLayer`, `craftingComplexity`, `dimensionContext`, `baselineDimensions`, `dimensionAspects`, `minConfidence`, `writeReport`, `excludedNamespaces`, `excludedIds`, `excludedWords`.
+`items`, `entities`, `learnFromThaumaturgeCache`, `mobEnrichment`, `familyConsistency`, `canonNamespaces`, `functionLayer`, `craftingComplexity`, `dimensionContext`, `baselineDimensions`, `dimensionAspects`, `minConfidence`, `writeReport`, `excludedNamespaces`, `excludedIds`, `excludedWords`.
 
 After each reload, every guess, and every addition with the layer that made it, is written to `config/aspect_interpreter/assignments.txt`. To override a guess, give the object a real `base_aspects` or `entity_aspects` entry; real entries always win.
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.7.0
+- **Family consistency.** Similar items now share their key aspects. The recipe rule loses a defining aspect when no ingredient carries it: vanilla candles are hand-written lux, but Forestry's big and jumbo candles and Thaumaturge's own coloured candles are crafted from wax and dye and came out with no lux. Crafted and interpreted items of any mod now take up to 2 key aspects from their hand-written relatives. Hand-written items are never changed.
+  - **Families** are head nouns, found per mod first, then across the pack. A word counts as a head only if it mostly ends names, so `big_candle_red` and `jumbo_candle_refractory` are candles, a `copper_candle_holder` is a holder, and a potato cannon is not a potato.
+  - **Keys** are aspects carried by 60%+ of the hand-written members, ignoring what material or modifier words explain (chorus fruit's alienis comes from "chorus", not "fruit").
+  - **Same kind only.** An item learns only from members of the same kind (block of the same material, food, gear, other item) or ones sharing an item tag. A music disc doesn't learn from chicken meat.
+  - **Amounts** are sized to the key's share in the family, at most the item's largest aspect, and at most half its total altogether.
+- **Light sources carry lux.** A block that shines at 10+ as placed, or when lit by hand (candles, candle holders, redstone lamps; not furnaces), takes lux if the pack's hand-written light sources mostly carry it. Faint glows such as brewing stands and magma blocks don't count, matching the hand-written data.
+- **New config option:** `familyConsistency`.
+- **Preview** on the author's index, before the same-kind guard: about 280 items gain a family key, including 70 candles (lux), 44 pressure plates (machina, sensus), 43 buttons (machina) and 43 trapdoors (motus).
+
 ## 1.6.0
 A rebalance around three axes: aspect rarity, resource scarcity and processing effort. Mobs become the richest, hardest-to-process source; the original index is otherwise left alone.
 

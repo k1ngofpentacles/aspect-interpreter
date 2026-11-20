@@ -28,6 +28,8 @@ final class Config {
     boolean craftingComplexity = true;
     /** Enrich mobs from their habitat, dimension, behaviour and drops. The only layer that adds to hand-written entries. */
     boolean mobEnrichment = true;
+    /** Give crafted and interpreted items the key aspects their hand-written family members share (candles -> lux). */
+    boolean familyConsistency = true;
     /**
      * Mods whose aspects are canon: learned from, never added to. Trailing * matches a prefix. Any other mod that ships
      * its own Thaumaturge aspect files is detected and treated the same way automatically.

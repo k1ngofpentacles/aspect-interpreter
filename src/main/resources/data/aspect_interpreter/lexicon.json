@@ -3442,5 +3442,44 @@
     "thaumaturge:perditio": 0.8
    }
   }
+ },
+ "families": {
+  "_doc": "Family consistency. An item's family is its head noun: the last word of its name that names a kind of thing, after colour, size, material and the shaping or preparation words below. Crafted and interpreted members take the key aspects (up to 2, carried by at least 60%) of the family's hand-written members: its own mod's first, else the whole pack's. Hand-written items are never changed.",
+  "modifier_words": [
+   "cut",
+   "polished",
+   "chiseled",
+   "smooth",
+   "waxed",
+   "cracked",
+   "mossy",
+   "weathered",
+   "exposed",
+   "oxidized",
+   "stripped",
+   "carved",
+   "raw",
+   "cooked",
+   "roasted",
+   "fried",
+   "baked",
+   "dried",
+   "smoked",
+   "glazed",
+   "infused",
+   "big",
+   "jumbo",
+   "large",
+   "small",
+   "tiny",
+   "mini",
+   "giant",
+   "double",
+   "triple",
+   "quad",
+   "stacked",
+   "loft",
+   "terrace"
+  ]
  }
 }

@@ -43,6 +43,7 @@ final class InterpreterContributor implements IAspectRecipeContributor {
         long t0 = System.nanoTime();
         Knowledge.rebuildIfStale();
         CraftComplexity.prepare(recipes, registries);
+        FamilyLayer.prepare();
         var server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
         if (!Canon.computed()) Canon.compute(server);
         if (!DimensionContext.computed()) DimensionContext.compute(server);

@@ -68,6 +68,8 @@ final class FunctionLayer {
         return n > 1 ? List.of(t.get(n - 2) + "_" + t.get(n - 1), t.get(n - 1)) : List.of(t.get(0));
     }
 
+    static boolean isFunctionWord(String token) { return WORDS.containsKey(token); }
+
     static void calibrate(Map<String, Map<String, Double>> handWritten) {
         Map<String, int[]> counts = new HashMap<>();
         handWritten.forEach((id, aspects) -> {

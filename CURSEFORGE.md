@@ -23,7 +23,7 @@
   * Thaumaturge: *Required Dependency*
   * Thaumic Additions Community Edition: *Optional Dependency*
   * Madman's Dreams: *Optional Dependency*
-* **Changelog:** paste the 1.6.0 section of `CHANGELOG.md`.
+* **Changelog:** paste the 1.7.0 section of `CHANGELOG.md`.
 
 ## Description 
 

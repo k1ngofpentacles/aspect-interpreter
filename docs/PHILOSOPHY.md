@@ -88,6 +88,7 @@ Victus (life) is almost never used for mobs.
 | Dimension as habitat | **Dimension context (1.3.0, reworked in 1.6.0).** Every world but the Overworld is alien, except the Nether, an underworld: this world's below rather than an outer one. Dimension flavour goes on native mobs and on interpreted items that come from them, never on blocks or hand-written items. |
 | Addon aspects are rare | They are only used where an add-on defines them or a mob's dimension calls for them. |
 | Hand-written aspects are authorial | **Canon (1.6.0).** Vanilla, Thaumaturge and its add-ons, Create and its add-ons, and any mod detected shipping its own aspect files are learned from but never added to (their mobs excepted). |
+| Families share a defining aspect, but recipes lose it | **Family consistency (1.7.0).** Crafted and interpreted items take the 1–2 key aspects their hand-written relatives agree on (crafted candles take vanilla's lux), and bright light sources carry lux. See section 9. |
 | Scarcity | See section 6. |
 
 ### Prototype results on vanilla recipe chains
@@ -175,3 +176,20 @@ An aspect source is balanced along three axes: how rare its aspects are, how sca
 | allay, breeze, vex, shulker | (4 aspects each) | nothing: already rich, and no candidate is strong enough |
 
 Mean aspects per mob 2.9 → 3.7; mean total 27 → 31.
+
+## 9. Families (1.7.0)
+
+Similar objects share their defining aspect in the hand-written data: every vanilla candle is lux 5, every pressure plate machina + sensus, every button machina. The recipe rule loses that aspect whenever no ingredient carries it. In the author's pack, 36 Forestry big and jumbo candles and 16 Thaumaturge candles were crafted from wax and dye and carried no lux. Their aspects were scattered across bestia, fabrico and each dye's colour aspects.
+
+**Light is drawn by brightness.** Among vanilla's hand-written blocks that give off light, the bright ones (torches, glowstone, end rods, froglights, shroomlight) carry lux. The faint ones (brewing stand, dragon egg, sculk sensor, ender chest, magma block) never do. Overall 12 of 25 light-emitting blocks carry lux, and those 12 are nearly all the bright ones; among blocks at 10+, only special blocks like the beacon and conduit lack it. So only light 10+ counts.
+
+**Preview** on the author's index. It doesn't include the same-kind guard or light sources, which need the running game. Thaumaturge's own candles use the wool sound, so the guard keeps them from learning from vanilla's candles. They shine at light 14, so they get lux as light sources instead.
+
+| Family | Key | Items gaining it |
+|---|---|---:|
+| candle | lux | 70 |
+| pressure plate | machina, sensus | 44 |
+| button | machina | 43 |
+| trapdoor | motus | 43 |
+| wool | fabrico | 32 |
+| door | vinculum, machina | 17 |

@@ -19,6 +19,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * <ul>
  *   <li><b>Mobs</b> ({@link MobEnrichment}): habitat, dimension, behaviour and drops. The only layer that adds to
  *       hand-written entries.</li>
+ *   <li><b>Family</b> ({@link FamilyLayer}): crafted and interpreted items of any mod take the key aspects their
+ *       hand-written relatives share (Forestry's and Thaumaturge's crafted candles take lux from vanilla's).</li>
  *   <li><b>Craftsmanship</b> ({@link CraftComplexity}): items of non-canon mods made at the crafting table, whether
  *       Thaumaturge derived them or the interpreter guessed them.</li>
  *   <li><b>Function</b> ({@link FunctionLayer}): only items the interpreter fills in.</li>
@@ -52,8 +54,8 @@ public final class Additions {
     }
 
     static String summary() {
-        return String.format(Locale.ROOT, "craftsmanship %d, function %d, mob-drop dimension %d",
-                COUNTS.getOrDefault("craftsmanship", 0), COUNTS.getOrDefault("function", 0), COUNTS.getOrDefault("dimension", 0));
+        return String.format(Locale.ROOT, "family %d, craftsmanship %d, function %d, mob-drop dimension %d",
+                COUNTS.getOrDefault("family", 0), COUNTS.getOrDefault("craftsmanship", 0), COUNTS.getOrDefault("function", 0), COUNTS.getOrDefault("dimension", 0));
     }
 
     static String entitySummary() {
@@ -61,15 +63,23 @@ public final class Additions {
                 ENTITY_COUNTS.getOrDefault("real", 0), ENTITY_COUNTS.getOrDefault("guess", 0));
     }
 
-    /** Recipe-derived items (called from the crafting mixin): craftsmanship only, and only for non-canon table crafts. */
+    /**
+     * Recipe-derived items (called from the crafting mixin): family keys for any mod's crafted items, then
+     * craftsmanship for non-canon table crafts. Hand-written items never reach here.
+     */
     public static AspectList forDerived(Item item, AspectList list, HolderLookup.Provider registries) {
         String id = BuiltInRegistries.ITEM.getKey(item).toString();
-        if (Config.get().excluded(id) || Canon.isCanon(id)) return list;
-        if (list.entries().size() >= MAX_FOR_EXTRAS) return list;
+        if (Config.get().excluded(id)) return list;
+        Map<String, Integer> current = amounts(list);
         Map<String, Integer> plan = new LinkedHashMap<>();
-        Map<String, Integer> craft = new LinkedHashMap<>(CraftComplexity.craftsmanship(item, list.totalAmount()));
-        craft.keySet().removeAll(present(list));
-        layer(plan, "craftsmanship", id, craft);
+        layer(plan, "family", id, FamilyLayer.additions(item, id, current));
+        Set<String> now = new HashSet<>(current.keySet());
+        now.addAll(plan.keySet());
+        if (!Canon.isCanon(id) && now.size() < MAX_FOR_EXTRAS) {
+            Map<String, Integer> craft = new LinkedHashMap<>(CraftComplexity.craftsmanship(item, list.totalAmount()));
+            craft.keySet().removeAll(now);
+            layer(plan, "craftsmanship", id, craft);
+        }
         return apply(list, plan, registries);
     }
 
@@ -78,7 +88,10 @@ public final class Additions {
         int total = 0;
         for (int x : aspects.values()) total += x;
         Map<String, Integer> plan = new LinkedHashMap<>();
-        layer(plan, "dimension", id, DimensionContext.dropAdditions(id, aspects.keySet(), total));
+        layer(plan, "family", id, FamilyLayer.additions(item, id, aspects));
+        Set<String> withFamily = new HashSet<>(aspects.keySet());
+        withFamily.addAll(plan.keySet());
+        layer(plan, "dimension", id, DimensionContext.dropAdditions(id, withFamily, total));
         Set<String> now = new HashSet<>(aspects.keySet());
         now.addAll(plan.keySet());
         if (now.size() < MAX_FOR_EXTRAS) {
@@ -113,10 +126,10 @@ public final class Additions {
         return aspect.substring(aspect.indexOf(':') + 1);
     }
 
-    private static Set<String> present(AspectList list) {
-        Set<String> s = new HashSet<>();
-        for (AspectInstance i : list.entries()) i.aspect().unwrapKey().ifPresent(k -> s.add(k.location().toString()));
-        return s;
+    private static Map<String, Integer> amounts(AspectList list) {
+        Map<String, Integer> m = new LinkedHashMap<>();
+        for (AspectInstance i : list.entries()) i.aspect().unwrapKey().ifPresent(k -> m.merge(k.location().toString(), i.amount(), Integer::sum));
+        return m;
     }
 
     /** Adds each planned aspect to the original list; existing entries are never changed except by addition. */

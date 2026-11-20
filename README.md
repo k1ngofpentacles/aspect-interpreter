@@ -6,6 +6,7 @@ It never replaces or reduces an existing aspect. It does three things:
 
 - **Fills gaps:** it answers when Thaumaturge would otherwise have nothing, including what the item is for (a barrel holds things, so it gets vacuos).
 - **Enriches mobs:** mobs are the richest source of aspects and the hardest to process. Each mob gains aspects from where it lives (a stray gets gelum), the dimension it comes from (a ghast gets infernum and spiritus; End mobs get alienis), how it behaves (undead get mortuus) and what it drops. Fantasy creatures gain more than ordinary animals, and bosses and rare mobs carry larger totals.
+- **Keeps families consistent:** crafted items lose defining aspects when no ingredient carries them (vanilla candles are lux, but crafted candles from other mods weren't). Crafted and interpreted items now share the 1–2 key aspects their hand-written relatives agree on, and bright light sources carry lux.
 - **Credits craftsmanship:** crafted items from other mods, made at the crafting table, gain ordo or fabrico for each step beyond the first.
 
 Hand-written aspects are canon. Vanilla, Thaumaturge and its add-ons, Create and its add-ons, and any mod that ships its own aspect files are learned from but never added to, except that their mobs are enriched. Every addition is sized to match how sparingly the original mods use each aspect.
@@ -42,6 +43,7 @@ The config file is `config/aspect_interpreter.json`:
 | `learnFromThaumaturgeCache` | `true` | Also learn from Thaumaturge's resolved index, excluding this mod's own guesses |
 | `mobEnrichment` | `true` | Enrich mobs from habitat, dimension, behaviour and drops |
 | `canonNamespaces` | vanilla, Thaumaturge family, Create family | Mods that are only read, never added to (hand-writing mods are detected automatically) |
+| `familyConsistency` | `true` | Give crafted and interpreted items their family's key aspects (candles → lux) |
 | `functionLayer` | `true` | Add a missing function aspect to interpreted items |
 | `craftingComplexity` | `true` | Add craftsmanship to crafting-table items of non-canon mods |
 | `dimensionContext` | `true` | Use the dimension a mob comes from |

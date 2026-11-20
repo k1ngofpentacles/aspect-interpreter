@@ -36,6 +36,8 @@ final class Lexicon {
     final Map<String, Map<String, Double>> traits = new LinkedHashMap<>();
     /** "#c:biome_tag" -> aspect weights: the landscape reading of a biome. */
     final Map<String, Map<String, Double>> habitats = new LinkedHashMap<>();
+    /** Shaping and preparation words that never name a family (cut, polished, roasted...). */
+    final Set<String> familyModifiers = new HashSet<>();
     private volatile Map<String, Double> calibration = Map.of();
 
     static Lexicon load() {
@@ -66,6 +68,8 @@ final class Lexicon {
                 d.getValue().getAsJsonObject().entrySet().forEach(x -> w.put(x.getKey(), x.getValue().getAsDouble()));
                 lex.dimensions.put(d.getKey(), w);
             }
+            JsonObject fam = root.getAsJsonObject("families");
+            if (fam != null) for (JsonElement w : fam.getAsJsonArray("modifier_words")) lex.familyModifiers.add(Tokens.norm(w.getAsString()));
             JsonObject mobs = root.getAsJsonObject("mobs");
             if (mobs != null) {
                 for (JsonElement w : mobs.getAsJsonArray("real_animals")) lex.realAnimals.add(Tokens.norm(w.getAsString()));
