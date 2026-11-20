@@ -64,6 +64,7 @@ final class Model {
     }
 
     boolean knows(String id) { return train.containsKey(id); }
+    Set<String> ids() { return Collections.unmodifiableSet(train.keySet()); }
     Map<String, Double> known(String id) { return train.get(id); }
 
     private double info(String t) {

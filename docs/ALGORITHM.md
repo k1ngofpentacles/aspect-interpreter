@@ -42,7 +42,10 @@ A separate list of neutral words (colours, shapes, sizes) is ignored for meaning
 | Recipes (items) | Any recipe type producing the item whose ingredients resolve (≥50%), at 75% of the inputs. | 2.0 × fraction resolved |
 | Material (items) | Block sound type (wood, stone, metal, glass, wool...), light level, food, tool, attack damage, armour, fire resistance | up to 0.8 |
 | Creature (spawn eggs) | The entity's real or interpreted aspects, plus victus | 1.2 |
+| Dimension | The leading aspects of the dimension the object comes from (see below) | 0.5 × share of the object's association with that dimension |
 | Category (entities) | Monster → aversio/bestia; creature → bestia/victus; water → aqua/bestia; ambient → bestia/volatus/tenebrae; fire immunity adds a little ignis, for living creatures only; non-living entities (boats, minecarts, arrows, projectiles) are read as the item they are or most resemble | 0.7 (item match 1.5) |
+
+**2b. Native objects keep their dimension.** An object at least 60% associated with a non-baseline dimension always gets at least 1 point (or 10% of its total) of that dimension's leading aspect, replacing its weakest aspect if it already has 4.
 
 **3. Blend.** Take the weighted average of the distributions. Keep aspects holding at least 12% of the mass, up to 4.
 
@@ -51,6 +54,20 @@ A separate list of neutral words (colours, shapes, sizes) is ignored for meaning
 **5. Score confidence.** Confidence = total evidence weight ÷ 2, capped at 1. Below `minConfidence` (default 0.15), the ID is left unassigned.
 
 **6. Check the aspects exist.** Aspects the running pack doesn't define (for example, an addon aspect seen in a data map of a mod that is not loaded) are dropped, and the rest are rescaled.
+
+## Dimension context
+
+Some meaning comes from where a thing comes from: a cod from the End should be a little alien, whatever its name says. At each server start and reload, the mod reads, for every dimension:
+
+- **Creatures:** which ones its biomes spawn, and which ones its structures spawn (via spawn overrides).
+- **Blocks:** which ones its terrain and world features place, found by walking each feature's encoded configuration, including nested features.
+- **Items:** which ones those creatures drop (their loot tables), and which ones are named after them (`cosmic_cod_bucket`, `spawn_egg_cosmic_cod`).
+
+Each object gets a share per dimension. The Overworld is the baseline (configurable) and carries no meaning of its own.
+
+**Dimension signatures are learned, not hard-coded.** For each dimension, the mod takes the already-assigned objects native to it and finds the aspects that are over-represented compared with the whole pack: at least 3× the usual rate and at least 5% of the mix. Families of variants count once, so sixteen coloured shulker boxes don't drown out everything else.
+
+This is blended with a small prior in the lexicon. The prior matters most when a dimension has few assigned natives, and is matched by name for dimensions it doesn't list. In an offline test on the author's pack (using hand-picked End and Nether items), the End came out **alienis, then tenebrae**, and the Nether **ignis**. The in-game result is logged at startup. `dimensionAspects` in the config can pin a signature by hand.
 
 ## Where it learns from
 
@@ -71,7 +88,7 @@ The test, run during development on the author's 10,595-item pack, hides 20% of 
 
 ## Config: `config/aspect_interpreter.json`
 
-`items`, `entities`, `learnFromThaumaturgeCache`, `minConfidence`, `writeReport`, `excludedNamespaces`, `excludedIds`, `excludedWords`.
+`items`, `entities`, `learnFromThaumaturgeCache`, `dimensionContext`, `baselineDimensions`, `dimensionAspects`, `minConfidence`, `writeReport`, `excludedNamespaces`, `excludedIds`, `excludedWords`.
 
 After each reload, every guess is written to `config/aspect_interpreter/assignments.txt` with its confidence and strongest evidence. To override a guess, give the object a real `base_aspects` or `entity_aspects` entry; real entries always win.
 
@@ -80,8 +97,9 @@ After each reload, every guess is written to `config/aspect_interpreter/assignme
 All of the work happens once, inside Thaumaturge's own index build, and Thaumaturge caches the result to `config/thaumaturge/aspect_index.json`. Later launches load that cache and cost nothing.
 
 - **Learning:** about 50–150 ms each time data maps load.
+- **Dimension context:** computed once per server start or reload, before the index build. It reads each dimension's biomes, features and creature loot tables once; the time it took is logged.
 - **Item guesses:** about 0.2 ms each. Each item's guess is reused across Thaumaturge's two resolution passes.
 - **Recipe evaluation:** capped at 4 recipes per item and 2 options per ingredient.
-- **Entities:** every entity type is pre-guessed once (on the server thread at startup, or on a background thread when connected to a remote server). The per-frame lookup from Thaumaturge's goggles overlay is a pure table read and never computes anything.
+- **Entities:** every entity type is pre-guessed once on the server at startup and after reloads. The finished table is sent to each player when they join (a few kilobytes), so clients never compute guesses and always agree with the server. The per-frame lookup from Thaumaturge's goggles overlay is a pure table read.
 - **First install:** Thaumaturge's cache doesn't know about this mod. Whenever the mod's version or config changes, the old cache is moved aside to `aspect_index.before_interpreter.json`, so Thaumaturge rebuilds once with interpreted aspects included.
 - **Logging:** the log reports how many items were filled and how many milliseconds the interpreter added to the build. The report is written after the build finishes.

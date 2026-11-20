@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.0
+- **Dimension context.** Objects now take on the character of the dimension they come from. It's read from what each dimension actually spawns, generates and drops, and from items named after those creatures. Cosmic cod and its bucket and spawn egg now carry alienis.
+- **Learned dimension signatures.** Each dimension's signature is learned from the aspects over-represented among its already-assigned natives, blended with a small lexicon prior. The End comes out alienis then tenebrae, the Nether ignis.
+- **Natives keep their dimension.** An object native to a non-baseline dimension always gets at least 1 point of its dimension's leading aspect.
+- **Multiplayer.** The server now sends its entity guess table to clients, so they no longer compute their own and always match the server.
+- **New config options:** `dimensionContext`, `baselineDimensions`, `dimensionAspects`.
+
 ## 1.2.0
 - **No third-party data bundled.** The interpreter now learns only from the player's own installation: live data maps, plus Thaumaturge's resolved index cache with this mod's own guesses excluded.
 - **Self-correcting fresh installs.** A fresh install learns from data maps on its first launch, then rebuilds once more on the second launch to learn from the full index.

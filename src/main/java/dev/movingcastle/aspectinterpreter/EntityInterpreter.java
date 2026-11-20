@@ -13,17 +13,15 @@ import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Fallback aspects for entity types with no entity_aspects entry.
  *
  * Thaumaturge's goggles overlay asks for entity aspects every frame, so {@link #guess} must never
- * compute anything: it only reads a finished table. The table is filled by {@link #warmUp} — on the
- * server thread at startup (well under a second for ~450 types), or on a background thread when a
- * client joins a remote server. Until it is ready, lookups simply return nothing.
+ * compute anything: it only reads a finished table. The server fills it in {@link #warmUp} at startup
+ * and after reloads, then sends it to every client ({@link EntityTablePayload}), so the goggles,
+ * scans and server-side mechanics always agree. Until it arrives, lookups simply return nothing.
  */
 public final class EntityInterpreter {
     private EntityInterpreter() {}
@@ -32,7 +30,6 @@ public final class EntityInterpreter {
     private static final Map<EntityType<?>, Map<String, Double>> GUESSES = new ConcurrentHashMap<>();
     private static volatile HolderLookup.Provider listsFor;
     private static volatile boolean ready;
-    private static final AtomicBoolean warming = new AtomicBoolean();
     private static final String T = "thaumaturge:";
 
     private static final Map<MobCategory, Map<String, Double>> CATEGORY = new EnumMap<>(MobCategory.class);
@@ -48,10 +45,7 @@ public final class EntityInterpreter {
 
     /** Called from the mixin, possibly every frame. Pure table lookup; returns null when there is nothing to add. */
     public static AspectList guess(EntityType<?> type) {
-        if (!ready) {
-            warmUpAsync(); // e.g. after a data-map sync; never block the caller
-            return null;
-        }
+        if (!ready) return null; // the server's table hasn't arrived yet; never compute on the caller's thread
         HolderLookup.Provider provider = provider();
         if (provider == null) return null;
         if (provider != listsFor) { LISTS.clear(); listsFor = provider; }
@@ -81,13 +75,34 @@ public final class EntityInterpreter {
         ready = true;
     }
 
-    private static void warmUpAsync() {
-        if (!warming.compareAndSet(false, true)) return;
-        CompletableFuture.runAsync(() -> {
-            try { warmUp(); } catch (Throwable t) { AspectInterpreter.LOG.warn("Aspect Interpreter entity warm-up failed", t); }
-            finally { warming.set(false); }
+    /** The server's finished table, as sent to clients. */
+    static Map<String, Map<String, Integer>> table() {
+        Map<String, Map<String, Integer>> out = new HashMap<>();
+        GUESSES.forEach((type, g) -> {
+            if (g.isEmpty()) return;
+            Map<String, Integer> m = new LinkedHashMap<>();
+            g.forEach((a, x) -> m.put(a, (int) Math.round(x)));
+            out.put(EntityType.getKey(type).toString(), m);
         });
+        return out;
     }
+
+    /** Client side: adopt the server's table so goggles and scans agree with the server. */
+    static void acceptRemote(Map<String, Map<String, Integer>> table) {
+        Map<EntityType<?>, Map<String, Double>> fresh = new HashMap<>();
+        table.forEach((id, aspects) -> {
+            ResourceLocation rl = ResourceLocation.tryParse(id);
+            if (rl == null || !BuiltInRegistries.ENTITY_TYPE.containsKey(rl)) return;
+            Map<String, Double> g = new LinkedHashMap<>();
+            aspects.forEach((a, x) -> g.put(a, (double) x));
+            fresh.put(BuiltInRegistries.ENTITY_TYPE.get(rl), g);
+        });
+        GUESSES.clear();
+        GUESSES.putAll(fresh);
+        LISTS.clear();
+        ready = true;
+    }
+
 
     /** The entity's real aspects if it has any, otherwise the interpreter's guess. Used for spawn eggs. */
     static Map<String, Double> knownOrGuess(EntityType<?> type) {
@@ -131,6 +146,7 @@ public final class EntityInterpreter {
             // Only living creatures: projectiles and body-part entities are fire-immune for technical reasons.
             extra.add(new Model.Source("fireproof", Map.of(T + "ignis", 1.0), 0.2));
         }
+        extra.addAll(DimensionContext.sources(id, true));
         double size = Math.cbrt(Math.max(0.01, type.getWidth() * type.getWidth() * type.getHeight()));
         double fallback = 25 * Math.max(0.4, Math.min(2.0, size / 0.9));
         Model.Prediction p = Knowledge.entities().predict(id, extra, fallback, forcedTotal);
@@ -138,7 +154,8 @@ public final class EntityInterpreter {
             AssignmentLog.entity(id, null, p == null ? 0 : p.confidence(), p == null ? "no evidence" : "below min_confidence");
             return Map.of();
         }
-        AssignmentLog.entity(id, p.aspects(), p.confidence(), p.basis());
+        DimensionContext.ensureNative(p.aspects(), id, true);
+        AssignmentLog.entity(id, p.aspects(), p.confidence(), p.basis() + DimensionContext.describe(id, true));
         Map<String, Double> out = new LinkedHashMap<>();
         p.aspects().forEach((a, x) -> out.put(a, (double) x));
         return out;

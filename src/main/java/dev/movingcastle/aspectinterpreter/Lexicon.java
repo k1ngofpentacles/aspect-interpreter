@@ -20,6 +20,7 @@ final class Lexicon {
     final Map<String, Map<String, Double>> keywords = new HashMap<>();
     final Set<String> neutral = new HashSet<>();
     final Map<String, String> meanings = new LinkedHashMap<>();
+    final Map<String, Map<String, Double>> dimensions = new HashMap<>();
     private volatile Map<String, Double> calibration = Map.of();
 
     static Lexicon load() {
@@ -27,6 +28,13 @@ final class Lexicon {
         try (InputStream in = Lexicon.class.getResourceAsStream("/data/aspect_interpreter/lexicon.json")) {
             JsonObject root = JsonParser.parseReader(new InputStreamReader(Objects.requireNonNull(in), StandardCharsets.UTF_8)).getAsJsonObject();
             for (JsonElement e : root.getAsJsonArray("neutral")) lex.neutral.add(Tokens.norm(e.getAsString()));
+            JsonObject dims = root.getAsJsonObject("dimensions");
+            if (dims != null) for (Map.Entry<String, JsonElement> d : dims.entrySet()) {
+                if (!d.getValue().isJsonObject()) continue;
+                Map<String, Double> w = new HashMap<>();
+                d.getValue().getAsJsonObject().entrySet().forEach(x -> w.put(x.getKey(), x.getValue().getAsDouble()));
+                lex.dimensions.put(d.getKey(), w);
+            }
             for (Map.Entry<String, JsonElement> a : root.getAsJsonObject("aspects").entrySet()) {
                 JsonObject def = a.getValue().getAsJsonObject();
                 lex.meanings.put(a.getKey(), def.get("meaning").getAsString());
@@ -69,6 +77,10 @@ final class Lexicon {
             }
         }
         return out;
+    }
+
+    Map<String, Double> dimensionPrior(String dim) {
+        return dimensions.getOrDefault(dim, Map.of());
     }
 
     double calibrationFor(String gram, String aspect) {

@@ -8,7 +8,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /** config/aspect_interpreter.json */
 final class Config {
@@ -20,6 +22,12 @@ final class Config {
     double minConfidence = 0.15;
     /** Write config/aspect_interpreter/assignments.txt after each reload so you can review guesses. */
     boolean writeReport = true;
+    /** Use where an object spawns, generates or drops (which dimension) as evidence. */
+    boolean dimensionContext = true;
+    /** Dimensions that carry no special meaning. */
+    List<String> baselineDimensions = new ArrayList<>(List.of("minecraft:overworld"));
+    /** Optional fixed signatures, e.g. {"minecraft:the_end": {"thaumaturge:alienis": 1.0}}. Replaces the learned one. */
+    Map<String, Map<String, Double>> dimensionAspects = new HashMap<>();
     List<String> excludedNamespaces = new ArrayList<>();
     List<String> excludedIds = new ArrayList<>(List.of(
             "minecraft:air", "minecraft:barrier", "minecraft:light", "minecraft:structure_void", "minecraft:structure_block",

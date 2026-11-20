@@ -11,6 +11,10 @@ import net.neoforged.neoforge.event.OnDatapackSyncEvent;
 import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
+import net.neoforged.neoforge.registries.datamaps.DataMapsUpdatedEvent;
+import net.minecraft.server.MinecraftServer;
 import org.slf4j.Logger;
 
 import java.nio.charset.StandardCharsets;
@@ -22,27 +26,37 @@ import java.security.MessageDigest;
 @Mod(AspectInterpreter.MODID)
 public final class AspectInterpreter {
     public static final String MODID = "aspect_interpreter";
-    static final String VERSION = "1.2.0";
+    static final String VERSION = "1.3.0";
     static final Logger LOG = LogUtils.getLogger();
 
     public AspectInterpreter(IEventBus modBus, ModContainer container) {
         modBus.addListener(RegisterAspectContributorsEvent.class, e -> e.register(new InterpreterContributor()));
-        NeoForge.EVENT_BUS.addListener(net.neoforged.neoforge.registries.datamaps.DataMapsUpdatedEvent.class, e -> {
+        modBus.addListener(RegisterPayloadHandlersEvent.class, e -> e.registrar("1").playToClient(
+                EntityTablePayload.TYPE, EntityTablePayload.CODEC,
+                (payload, ctx) -> ctx.enqueueWork(() -> EntityInterpreter.acceptRemote(payload.table()))));
+        NeoForge.EVENT_BUS.addListener(DataMapsUpdatedEvent.class, e -> {
+            if (e.getCause() != DataMapsUpdatedEvent.UpdateCause.SERVER_RELOAD) return; // clients get the server's table
             Knowledge.markStale();
             EntityInterpreter.invalidate();
         });
         NeoForge.EVENT_BUS.addListener(ServerAboutToStartEvent.class, e -> invalidateStaleThaumaturgeCache());
-        NeoForge.EVENT_BUS.addListener(ServerStartedEvent.class, e -> refresh());
+        NeoForge.EVENT_BUS.addListener(ServerStartedEvent.class, e -> refresh(e.getServer()));
         NeoForge.EVENT_BUS.addListener(OnDatapackSyncEvent.class, e -> {
-            if (e.getPlayer() == null) refresh();
+            if (e.getPlayer() == null) {
+                refresh(e.getPlayerList().getServer());
+                PacketDistributor.sendToAllPlayers(new EntityTablePayload(EntityInterpreter.table()));
+            } else {
+                PacketDistributor.sendToPlayer(e.getPlayer(), new EntityTablePayload(EntityInterpreter.table()));
+            }
         });
         // Thaumaturge builds its index synchronously inside one server tick; report once that tick ends.
         NeoForge.EVENT_BUS.addListener(ServerTickEvent.Post.class, e -> InterpreterContributor.finishBuildIfDone());
     }
 
-    private static void refresh() {
+    private static void refresh(MinecraftServer server) {
         try {
             Knowledge.rebuildIfStale();
+            DimensionContext.compute(server);
             EntityInterpreter.warmUp();
             AssignmentLog.write();
         } catch (Throwable t) {

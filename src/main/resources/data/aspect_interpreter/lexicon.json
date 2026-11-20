@@ -2711,5 +2711,37 @@
   "the",
   "in",
   "on"
- ]
+ ],
+ "dimensions": {
+  "_doc": "Prior meaning of known dimensions, blended with what is learned from objects native to each. Unlisted dimensions fall back to matching their name against the words above.",
+  "minecraft:the_end": {
+   "thaumaturge:alienis": 1.0,
+   "thaumaturge:tenebrae": 0.5,
+   "thaumaturge:vacuos": 0.3
+  },
+  "minecraft:the_nether": {
+   "thaumadditions:infernum": 1.0,
+   "thaumaturge:ignis": 0.8,
+   "thaumaturge:perditio": 0.3
+  },
+  "deeperdarker:otherside": {
+   "thaumaturge:tenebrae": 1.0,
+   "thaumaturge:alienis": 0.6,
+   "thaumaturge:sensus": 0.4
+  },
+  "aether:the_aether": {
+   "thaumaturge:aer": 1.0,
+   "thaumadditions:caeles": 0.6,
+   "thaumaturge:lux": 0.4
+  },
+  "twilightforest:twilight_forest": {
+   "thaumaturge:herba": 0.8,
+   "thaumaturge:tenebrae": 0.6,
+   "thaumaturge:praecantatio": 0.5
+  },
+  "madmans_dreams:dream": {
+   "madmans_dreams:somnium": 1.0,
+   "thaumaturge:alienis": 0.5
+  }
+ }
 }

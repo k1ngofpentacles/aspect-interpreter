@@ -42,6 +42,7 @@ final class InterpreterContributor implements IAspectRecipeContributor {
     public void beginBuild(RecipeManager recipes, HolderLookup.Provider registries) {
         long t0 = System.nanoTime();
         Knowledge.rebuildIfStale();
+        if (!DimensionContext.computed()) DimensionContext.compute(net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer());
         AssignmentLog.clearItems();
         byOutput.clear();
         memo.clear();
@@ -94,7 +95,7 @@ final class InterpreterContributor implements IAspectRecipeContributor {
                 return Optional.empty();
             }
             AspectList list = build(p.aspects(), registries);
-            AssignmentLog.item(id, list.isEmpty() ? null : p.aspects(), p.confidence(), p.basis());
+            AssignmentLog.item(id, list.isEmpty() ? null : p.aspects(), p.confidence(), p.basis() + DimensionContext.describe(id, false));
             if (list.isEmpty()) return Optional.empty();
             if (FILLED.add(id)) filled++;
             return Optional.of(list);
@@ -140,6 +141,8 @@ final class InterpreterContributor implements IAspectRecipeContributor {
             }
         }
 
+        extra.addAll(DimensionContext.sources(id, false));
+
         Model.Source material = ItemFeatures.of(item);
         if (material != null) extra.add(material);
 
@@ -150,7 +153,9 @@ final class InterpreterContributor implements IAspectRecipeContributor {
             extra.add(new Model.Source("egg", Map.of("thaumaturge:victus", 1.0), 0.4));
             if (forcedTotal == null) forcedTotal = 10.0;
         }
-        return Knowledge.items().predict(id, extra, 8, forcedTotal);
+        Model.Prediction p = Knowledge.items().predict(id, extra, 8, forcedTotal);
+        if (p != null) DimensionContext.ensureNative(p.aspects(), id, false);
+        return p;
     }
 
     static final ResourceKey<net.minecraft.core.Registry<IAspect>> ASPECT_REGISTRY = TTAspects.AER.registryKey();
