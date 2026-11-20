@@ -83,9 +83,10 @@ Victus (life) is almost never used for mobs.
 | Recipes conserve | Thaumaturge's own derivation is kept for material, and recipe types it doesn't read are evaluated the same way (× 0.75). |
 | Workmanship is hand-planted, so derived items lose it | **Crafting complexity (1.4.0).** Each crafting step beyond the first refinement adds craftsmanship of its kind: **ordo** for regular forms (stairs, slabs, walls, bricks; stonecutting), **machina** for machine processing (Create, Forestry and similar), **fabrico** for assembly. It is about 6% of the material per step, capped at 30%. Cooking and magic add none, since Thaumaturge already adds heat and praecantatio. Authored items are never touched, and the additions flow downstream through Thaumaturge's own rule. |
 | Habitat element for creatures | Category defaults are **learned** from the pack's own `entity_aspects` (only aspects most members share), falling back to bestia + terra for land creatures and aqua + bestia for water. |
-| Dimension as habitat | **Dimension context (1.3.0).** Signatures are learned from each dimension's assigned natives. **Defining aspects** (1.4.0) always join when the pack has them: infernum for the Nether once Thaumic Additions is installed, alienis for the End. Natives are guaranteed a point of it. |
-| Addon aspects are rare | They are only used where an add-on defines them or a defining dimension aspect calls for them. |
-| 2–3 aspects, unit 5 | At most 4 aspects, minor ones dropped below 12%. Amounts come from neighbours, so they follow the pack's own scale. |
+| Function is hand-planted, so derived items lose it | **Function layer (1.5.0).** A recipe-derived or interpreted item whose name's *head* (its last word or two) names a function gets that aspect if it lacks it: container → vacuos, lamp → lux, armour → praemunio, book → cognitio. Each pair is checked against the pack's hand-written items and dropped if the authors don't do it (Thaumaturge's bottles aren't vacuos). It adds one aspect at most, sized like a minor aspect. |
+| Dimension as habitat | **Dimension context (1.3.0, reworked in 1.5.0).** Every world but the Overworld is alien: its natives get **alienis**, then their dimension's **flavour**: ignis/infernum for the Nether (infernum when Thaumic Additions is installed), vacuos/tenebrae for the End, tenebrae/praecantatio for the Otherside. Unlisted dimensions are flavoured by what's learned from their natives. This applies to hand-written entries and real creatures too, as additions only, so crafted nether bricks inherit it through Thaumaturge's own recipe rule. |
+| Addon aspects are rare | They are only used where an add-on defines them or a dimension's flavour calls for them. |
+| Scarcity | See section 6. |
 
 ### Prototype results on vanilla recipe chains
 
@@ -102,6 +103,45 @@ Victus (life) is almost never used for mobs.
 
 Planks, ingots and authored items such as the chest and crafting table are unchanged.
 
-## 5. Open gaps
+## 5. The original layer's balance
 
-**Missing function.** The barrel shows that a derived item can lose a function its authored cousin has: a barrel holds things like a chest, but gets no vacuos. A *function layer* could add the lexicon's function aspect to derived items whose names call for one strongly (container → vacuos, light → lux), at secondary weight. It isn't implemented yet. Function words are much noisier than shape words, so it needs its own calibration against the authored items first.
+Measured over the 6,920-item resolved index (hand-written and recipe-derived together):
+
+| Measure | Value |
+|---|---|
+| Aspects per item | mean 2.63; **40% carry a single aspect** |
+| Total amount | median 15 hand-written, 10 recipe-derived |
+| Minor aspects | median **14%** of the item's total (middle half 5–25%). Function aspects 9–17%: vacuos 12%, lux 17%, cognitio 15%, alienis 9% |
+| Scarcity | herba 55%, metallum 18%, terra 18%, bestia 12% … alienis 3.4%, tenebrae 3.3%, lux 2.9%, infernum 0.4% |
+
+So most things are one or two materials, minor aspects are small, and the magical and otherworldly aspects are rare.
+
+## 6. Tuning to that balance (1.5.0)
+
+**Guesses were too stingy, not too generous.** On held-out items, version 1.4.0's guesses carried 1.92 aspects per item against 2.56 in the original layer, and gave rare aspects only half their true rate. They collapsed onto common materials like herba.
+
+| Change | Effect on held-out items |
+|---|---|
+| Keep threshold lowered from 12% to 8% | 2.31 aspects per item; prevalence error 0.78 → 0.64; top-aspect accuracy unchanged (72.6%) |
+| Aspect count matched to close neighbours (similarity ≥ 0.5) | Single-aspect guesses 33% → 42% (original layer: 41%); set overlap 0.684 → 0.711 |
+| A scarcity prior (rare aspects need stronger evidence) | Tested and rejected: every setting lowered accuracy, and the model already under-predicts rare aspects |
+
+Guess totals match the original at the median (ratio 1.00).
+
+**Additions are sized like the original's minor aspects.** Each added aspect uses that aspect's median minor share in the pack, capped at 20%. Function and craftsmanship stop at 5 aspects, which only 1% of hand-written items reach. Hand-written entries only ever receive dimension additions.
+
+**Whole-pack simulation** (original index + guesses for the 3,674 unassigned items + function and craftsmanship layers; the dimension layer needs a running world and isn't included):
+
+| Measure | Original layer | Whole pack |
+|---|---:|---:|
+| Aspects per item | 2.63 | 2.71 |
+| Rank order of aspect scarcity (Spearman) | — | 0.978 |
+| lux | 2.9% | 4.6% (authors' own hand-written rate: 4.2%) |
+| vacuos | 4.8% | 6.5% (hand-written rate: 6.1%) |
+
+The scarcity order of aspects is essentially unchanged. Function aspects rise toward the rate the authors use by hand, not beyond it. terra and bestia are higher among guesses (40% and 29%) because of the unassigned population itself: 94% of Macaw's paths and 80% of the roofs are stone, and Butchery and Alex's Mobs are mostly animal.
+
+## 7. Open questions
+
+- **Dimension additions:** their effect on scarcity can only be measured in game. The log reports how many objects they touched.
+- **Single-aspect guesses:** guesses for items with no close neighbour still rarely have a single aspect (16% across the unassigned items).

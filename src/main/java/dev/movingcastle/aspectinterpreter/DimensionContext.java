@@ -77,25 +77,38 @@ final class DimensionContext {
         return out;
     }
 
-    /** Makes sure an object native to a dimension carries at least one point of that dimension's leading aspect. */
-    static void ensureNative(LinkedHashMap<String, Integer> aspects, String id, boolean entity) {
-        if (!Config.get().dimensionContext || aspects.isEmpty()) return;
+    /** Guaranteed aspects per dimension, in order: alienis (every non-baseline dimension), then flavour candidates. */
+    private static volatile Map<String, List<String>> guarantees = Map.of();
+
+    /**
+     * What a native object must carry: alienis, plus the dimension's top available flavour. Missing ones are added, sized like minor aspects in the original layer. Applies to
+     * hand-written, recipe-derived and interpreted objects alike; nothing existing is ever replaced.
+     */
+    static Map<String, Integer> additions(String id, boolean entity, Set<String> present, int total) {
+        if (!Config.get().dimensionContext || total <= 0) return Map.of();
+        Map<String, Integer> add = new LinkedHashMap<>();
         for (Map.Entry<String, Double> d : dims(id, entity).entrySet()) {
             if (d.getValue() < NATIVE_SHARE) continue;
-            String lead = leads.get(d.getKey());
-            if (lead == null) continue;
-            if (aspects.containsKey(lead)) return;
-            int total = 0;
-            for (int x : aspects.values()) total += x;
-            if (aspects.size() >= Model.MAX_ASPECTS) {
-                String weakest = null;
-                for (Map.Entry<String, Integer> e : aspects.entrySet())
-                    if (weakest == null || e.getValue() < aspects.get(weakest)) weakest = e.getKey();
-                aspects.remove(weakest);
-            }
-            aspects.put(lead, Math.max(1, (int) Math.round(total * 0.1)));
-            return;
+            List<String> g = guarantees.get(d.getKey());
+            if (g == null || g.isEmpty()) continue;
+            String core = g.get(0);
+            if (!present.contains(core)) add.put(core, size(core, total));
+            // the dimension's top flavour (infernum for the Nether when Thaumic Additions is installed, else ignis)
+            if (g.size() > 1 && !present.contains(g.get(1))) add.put(g.get(1), size(g.get(1), total));
+            break;
         }
+        return add;
+    }
+
+    private static int size(String aspect, int total) {
+        return (int) Math.max(1, Math.round(Knowledge.minorShare(aspect) * total));
+    }
+
+    /** For interpreted objects: merge the native additions into a guess. */
+    static void ensureNative(LinkedHashMap<String, Integer> aspects, String id, boolean entity) {
+        int total = 0;
+        for (int x : aspects.values()) total += x;
+        additions(id, entity, aspects.keySet(), total).forEach((a, x) -> aspects.merge(a, x, Integer::sum));
     }
 
     static String describe(String id, boolean entity) {
@@ -199,12 +212,18 @@ final class DimensionContext {
                 itemDims.size(), entityDims.size(), (System.nanoTime() - t0) / 1_000_000, sj.length() == 0 ? "none" : sj);
     }
 
-    /** Learned over-represented aspects per dimension, blended with the lexicon's prior, limited to aspects the pack has. */
+    /**
+     * Signature per non-baseline dimension: alienis first (every other world is alien), then up to two flavours.
+     * Flavours come from the lexicon's prior for that dimension when the pack has those aspects; otherwise from
+     * the aspects most over-represented among its already-assigned natives; otherwise from its name.
+     */
     private static Map<String, LinkedHashMap<String, Double>> learnSignatures(Set<String> dims, RegistryAccess access, Map<String, String> leadsOut) {
         Config cfg = Config.get();
         Model items = Knowledge.items(), ents = Knowledge.entities();
         Set<String> available = new HashSet<>();
         access.registry(InterpreterContributor.ASPECT_REGISTRY).ifPresent(r -> r.keySet().forEach(k -> available.add(k.toString())));
+        List<String> core = new ArrayList<>(Knowledge.LEXICON.dimensionPrior("_core").keySet());
+        core.removeIf(a -> !available.contains(a));
 
         Map<String, Double> global = new HashMap<>();
         int n = 0;
@@ -213,60 +232,53 @@ final class DimensionContext {
         global.replaceAll((a, x) -> x / Math.max(1, fn));
 
         Map<String, LinkedHashMap<String, Double>> out = new HashMap<>();
+        Map<String, List<String>> guar = new HashMap<>();
         for (String dim : dims) {
             if (cfg.baselineDimensions.contains(dim)) continue;
-            // family-weighted mean profile of assigned objects native to this dimension
-            Map<List<String>, Integer> fams = new HashMap<>();
-            List<Map.Entry<String, Map<String, Double>>> natives = new ArrayList<>();
-            collectNatives(itemDims, items, dim, natives);
-            collectNatives(entityDims, ents, dim, natives);
-            for (Map.Entry<String, Map<String, Double>> e : natives) fams.merge(family(e.getKey()), 1, Integer::sum);
-            Map<String, Double> mean = new HashMap<>();
-            double W = 0;
-            for (Map.Entry<String, Map<String, Double>> e : natives) {
-                double w = 1.0 / fams.get(family(e.getKey()));
-                addProfile(mean, e.getValue(), w);
-                W += w;
-            }
-            Map<String, Double> learned = new HashMap<>();
-            if (W > 0) {
-                for (Map.Entry<String, Double> e : mean.entrySet()) {
-                    double share = e.getValue() / W, base = global.getOrDefault(e.getKey(), 1e-4);
-                    double lift = share / Math.max(base, 1e-4);
-                    if (lift >= LIFT_MIN && share >= SHARE_MIN) learned.put(e.getKey(), share * Math.log(lift));
-                }
-            }
-            double conf = fams.size() / (fams.size() + 5.0);
-            Map<String, Double> blended = new HashMap<>();
-            Model.normalise(learned).forEach((a, x) -> blended.merge(a, conf * x, Double::sum));
-            Model.normalise(prior(dim)).forEach((a, x) -> blended.merge(a, (1 - conf) * x + 0.25 * x, Double::sum));
+            // flavours: config override, else lexicon prior, else learned, else name
+            List<Map.Entry<String, Double>> flav = new ArrayList<>();
             Map<String, Double> override = cfg.dimensionAspects.get(dim);
-            if (override != null) { blended.clear(); blended.putAll(override); }
-            List<Map.Entry<String, Double>> ranked = new ArrayList<>(blended.entrySet());
-            ranked.removeIf(e -> !available.contains(e.getKey()));
-            ranked.sort((a, b) -> Double.compare(b.getValue(), a.getValue()));
+            Map<String, Double> prior = override != null ? override : Knowledge.LEXICON.dimensionPrior(dim);
+            prior.forEach((a, w) -> { if (available.contains(a) && !core.contains(a)) flav.add(Map.entry(a, w)); });
+            if (flav.isEmpty()) learned(dim, items, ents, global).forEach((a, w) -> { if (available.contains(a) && !core.contains(a)) flav.add(Map.entry(a, w)); });
+            if (flav.isEmpty()) prior(dim).forEach((a, w) -> { if (available.contains(a) && !core.contains(a)) flav.add(Map.entry(a, w)); });
+            flav.sort((a, b) -> Double.compare(b.getValue(), a.getValue()));
+
             LinkedHashMap<String, Double> sig = new LinkedHashMap<>();
-            for (Map.Entry<String, Double> e : ranked) {
-                if (sig.size() >= 2 || e.getValue() < 0.25 * ranked.get(0).getValue()) break;
-                sig.put(e.getKey(), e.getValue());
-            }
-            // Defining aspects (weight 1.0 in the lexicon's prior) always belong, when the pack has them:
-            // e.g. infernum for the Nether once Thaumic Additions is installed, alienis for the End.
-            String defining = null;
-            if (override == null) {
-                double top = ranked.isEmpty() ? 1.0 : ranked.get(0).getValue();
-                for (Map.Entry<String, Double> e : Knowledge.LEXICON.dimensionPrior(dim).entrySet()) {
-                    if (e.getValue() < 1.0 || !available.contains(e.getKey())) continue;
-                    if (defining == null) defining = e.getKey();
-                    sig.putIfAbsent(e.getKey(), Math.max(blended.getOrDefault(e.getKey(), 0.0), 0.5 * top));
-                }
-            }
-            if (!sig.isEmpty()) {
-                out.put(dim, sig);
-                leadsOut.put(dim, defining != null ? defining : sig.keySet().iterator().next());
-            }
+            for (String c : core) sig.put(c, 1.0);
+            for (int i = 0; i < Math.min(2, flav.size()); i++) sig.put(flav.get(i).getKey(), flav.get(i).getValue());
+            if (sig.isEmpty()) continue;
+            out.put(dim, sig);
+            List<String> g = new ArrayList<>(core);
+            for (Map.Entry<String, Double> f : flav) if (f.getValue() >= 0.8 || f == flav.get(0)) g.add(f.getKey());
+            guar.put(dim, g);
+            leadsOut.put(dim, String.join("+", g.subList(0, Math.min(g.size(), core.size() + 1))));
         }
+        guarantees = guar;
         return out;
+    }
+
+    /** Aspects over-represented among a dimension's assigned natives (family-weighted, lift >= 3x, share >= 5%). */
+    private static Map<String, Double> learned(String dim, Model items, Model ents, Map<String, Double> global) {
+        Map<List<String>, Integer> fams = new HashMap<>();
+        List<Map.Entry<String, Map<String, Double>>> natives = new ArrayList<>();
+        collectNatives(itemDims, items, dim, natives);
+        collectNatives(entityDims, ents, dim, natives);
+        for (Map.Entry<String, Map<String, Double>> e : natives) fams.merge(family(e.getKey()), 1, Integer::sum);
+        Map<String, Double> mean = new HashMap<>();
+        double W = 0;
+        for (Map.Entry<String, Map<String, Double>> e : natives) {
+            double w = 1.0 / fams.get(family(e.getKey()));
+            addProfile(mean, e.getValue(), w);
+            W += w;
+        }
+        Map<String, Double> learned = new HashMap<>();
+        if (W > 0) for (Map.Entry<String, Double> e : mean.entrySet()) {
+            double share = e.getValue() / W, base = global.getOrDefault(e.getKey(), 1e-4);
+            double lift = share / Math.max(base, 1e-4);
+            if (lift >= LIFT_MIN && share >= SHARE_MIN) learned.put(e.getKey(), share * Math.log(lift));
+        }
+        return Model.normalise(learned);
     }
 
     private static Map<String, Double> prior(String dim) {

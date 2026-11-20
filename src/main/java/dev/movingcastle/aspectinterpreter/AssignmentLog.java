@@ -40,14 +40,10 @@ final class AssignmentLog {
             out.add("");
             out.add("## Items (" + ITEMS.size() + ")");
             ITEMS.forEach((k, v) -> out.add(k + " | " + v));
-            Map<String, Map<String, Integer>> craft = CraftComplexity.added();
+            Map<String, String> added = Additions.log();
             out.add("");
-            out.add("## Craftsmanship added to recipe-derived items (" + craft.size() + ")");
-            craft.forEach((k, v) -> {
-                StringJoiner j = new StringJoiner(" ");
-                v.forEach((a, x) -> j.add("+" + a.replace("thaumaturge:", "") + " " + x));
-                out.add(k + " | " + j);
-            });
+            out.add("## Additions to existing aspects (" + added.size() + "; nothing is ever removed or reduced)");
+            added.forEach((k, v) -> out.add(k + " | " + v));
             out.add("");
             out.add("## Entities (" + ENTITIES.size() + ")");
             ENTITIES.forEach((k, v) -> out.add(k + " | " + v));

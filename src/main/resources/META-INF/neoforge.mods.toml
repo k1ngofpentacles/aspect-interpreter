@@ -5,7 +5,7 @@ issueTrackerURL = "https://github.com/k1ngofpentacles/aspect-interpreter/issues"
 
 [[mods]]
 modId = "aspect_interpreter"
-version = "1.4.0"
+version = "1.5.0"
 displayName = "Aspect Interpreter"
 displayURL = "https://github.com/k1ngofpentacles/aspect-interpreter"
 authors = "k1ngofpentacles"

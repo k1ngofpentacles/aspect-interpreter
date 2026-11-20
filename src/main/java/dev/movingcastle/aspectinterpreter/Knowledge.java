@@ -37,6 +37,14 @@ final class Knowledge {
     private static volatile Model entityModel;
     /** How many items were learned from Thaumaturge's cache in the last rebuild. */
     static volatile int learnedFromCache;
+    /** Median share each aspect takes of an item's total when it is not the leading aspect (the original layer's scale for additions). */
+    private static volatile Map<String, Double> minorShares = Map.of();
+    /** Items with hand-written base aspects in the running pack. */
+    static volatile Map<String, Map<String, Double>> authored = Map.of();
+
+    static double minorShare(String aspect) {
+        return Math.min(0.2, minorShares.getOrDefault(aspect, 0.14));
+    }
 
     static Map<String, Double> toMap(AspectList list) {
         Map<String, Double> v = new HashMap<>();
@@ -66,17 +74,34 @@ final class Knowledge {
                 learnedFromCache++;
             }
         }
+        Map<String, Map<String, Double>> hand = new HashMap<>();
         for (Item item : BuiltInRegistries.ITEM) {
             Holder.Reference<Item> h = item.builtInRegistryHolder();
             AspectList base = h.getData(AspectDataMaps.BASE_ASPECTS);
-            if (base != null && !base.isEmpty()) items.put(h.key().location().toString(), toMap(base));
+            if (base != null && !base.isEmpty()) {
+                Map<String, Double> m = toMap(base);
+                items.put(h.key().location().toString(), m);
+                hand.put(h.key().location().toString(), m);
+            }
         }
+        authored = hand;
+        Map<String, List<Double>> shares = new HashMap<>();
+        for (Map<String, Double> v : items.values()) {
+            double t = Model.total(v);
+            if (t <= 0 || v.size() < 2) continue;
+            String top = Collections.max(v.entrySet(), Map.Entry.comparingByValue()).getKey();
+            v.forEach((a, x) -> { if (!a.equals(top)) shares.computeIfAbsent(a, k -> new ArrayList<>()).add(x / t); });
+        }
+        Map<String, Double> med = new HashMap<>();
+        shares.forEach((a, l) -> { Collections.sort(l); med.put(a, l.get(l.size() / 2)); });
+        minorShares = med;
         Map<String, Map<String, Double>> entities = new HashMap<>();
         for (EntityType<?> type : BuiltInRegistries.ENTITY_TYPE) {
             AspectList a = type.builtInRegistryHolder().getData(AspectDataMaps.ENTITY_ASPECTS);
             if (a != null && !a.isEmpty()) entities.put(EntityType.getKey(type).toString(), toMap(a));
         }
         LEXICON.calibrate(items);
+        FunctionLayer.calibrate(hand);
         itemModel = new Model(items, LEXICON);
         entityModel = new Model(entities, LEXICON);
         stale = false;

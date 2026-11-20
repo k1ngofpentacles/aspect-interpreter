@@ -3,6 +3,7 @@ package dev.movingcastle.aspectinterpreter.mixin;
 import com.leclowndu93150.thaumaturge.api.aspect.AspectList;
 import com.leclowndu93150.thaumaturge.api.aspect.IAspectIndex;
 import com.leclowndu93150.thaumaturge.content.aspect.CraftingAspectContributor;
+import dev.movingcastle.aspectinterpreter.Additions;
 import dev.movingcastle.aspectinterpreter.CraftComplexity;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.world.item.Item;
@@ -16,8 +17,8 @@ import java.util.Optional;
 
 /**
  * Thaumaturge's crafting rule conserves material only. After it has derived an item from a crafting
- * recipe, add craftsmanship for the extra steps that went into it (see {@link CraftComplexity}).
- * Hand-assigned items never reach this method, so they are untouched.
+ * recipe, add what that rule cannot: the item's dimension, its function, and craftsmanship for the extra
+ * steps that went into it (see {@link Additions}). Hand-written items never reach this method.
  */
 @Mixin(value = CraftingAspectContributor.class, remap = false)
 public abstract class CraftingAspectContributorMixin {
@@ -29,7 +30,7 @@ public abstract class CraftingAspectContributorMixin {
         if (result == null || result.isEmpty()) return;
         try {
             CraftComplexity.prepare(recipes, registries);
-            AspectList enriched = CraftComplexity.enrich(item, result.get(), registries);
+            AspectList enriched = Additions.forDerived(item, result.get(), registries);
             if (enriched != result.get()) cir.setReturnValue(Optional.of(enriched));
         } catch (Throwable ignored) {
             // never break Thaumaturge's own derivation

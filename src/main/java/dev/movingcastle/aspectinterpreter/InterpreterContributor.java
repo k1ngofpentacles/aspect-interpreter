@@ -45,6 +45,7 @@ final class InterpreterContributor implements IAspectRecipeContributor {
         CraftComplexity.prepare(recipes, registries);
         if (!DimensionContext.computed()) DimensionContext.compute(net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer());
         AssignmentLog.clearItems();
+        Additions.clear();
         byOutput.clear();
         memo.clear();
         asked = filled = 0;
@@ -70,9 +71,12 @@ final class InterpreterContributor implements IAspectRecipeContributor {
     static void finishBuildIfDone() {
         if (!building) return;
         building = false;
-        AspectInterpreter.LOG.info("Aspect Interpreter: filled {} of {} unresolved items and added craftsmanship to {} recipe-derived items, {} ms of our own work inside Thaumaturge's index build",
-                filled, asked, CraftComplexity.added().size(), buildNanos / 1_000_000);
-        InterpretedIds.save(FILLED);
+        AspectInterpreter.LOG.info("Aspect Interpreter: filled {} of {} unresolved items; additions to existing items: {}; {} ms of our own work inside Thaumaturge's index build",
+                filled, asked, Additions.summary(), buildNanos / 1_000_000);
+        // never learn from our own work: exclude guessed items and items we added to from future cache learning
+        Set<String> ours = new HashSet<>(FILLED);
+        ours.addAll(Additions.itemIds());
+        InterpretedIds.save(ours);
         AspectInterpreter.recordBuild(Knowledge.learnedFromCache > 0);
         AssignmentLog.write();
     }
@@ -155,10 +159,7 @@ final class InterpreterContributor implements IAspectRecipeContributor {
             if (forcedTotal == null) forcedTotal = 10.0;
         }
         Model.Prediction p = Knowledge.items().predict(id, extra, 8, forcedTotal);
-        if (p != null) {
-            DimensionContext.ensureNative(p.aspects(), id, false);
-            CraftComplexity.enrich(item, p.aspects());
-        }
+        if (p != null) Additions.forGuess(item, id, p.aspects());
         return p;
     }
 

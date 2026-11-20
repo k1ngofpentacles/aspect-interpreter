@@ -46,7 +46,10 @@ public final class EntityInterpreter {
             CATEGORY.put(c, water);
     }
 
-    /** Called from the mixin, possibly every frame. Pure table lookup; returns null when there is nothing to add. */
+    /**
+     * Called from the mixin, possibly every frame. Pure table lookup. Returns the final list for this type: a guess
+     * for unassigned types, or the real entry plus additions for natives of other dimensions; null if neither.
+     */
     public static AspectList guess(EntityType<?> type) {
         if (!ready) return null; // the server's table hasn't arrived yet; never compute on the caller's thread
         HolderLookup.Provider provider = provider();
@@ -68,10 +71,21 @@ public final class EntityInterpreter {
         if (!Config.get().entities) return;
         Knowledge.rebuildIfStale();
         learnCategories();
+        Additions.clearEntities();
         Map<EntityType<?>, Map<String, Double>> fresh = new HashMap<>();
         for (EntityType<?> type : BuiltInRegistries.ENTITY_TYPE) {
             AspectList real = type.builtInRegistryHolder().getData(AspectDataMaps.ENTITY_ASPECTS);
-            if (real == null || real.isEmpty()) fresh.put(type, compute(type));
+            if (real == null || real.isEmpty()) { fresh.put(type, compute(type)); continue; }
+            // real entries keep everything they have; natives of other dimensions gain alienis and its flavour
+            String id = EntityType.getKey(type).toString();
+            Map<String, Integer> realInts = new LinkedHashMap<>();
+            Knowledge.toMap(real).forEach((a, x) -> realInts.put(a, (int) Math.round(x)));
+            Map<String, Integer> augmented = Config.get().excluded(id) ? null : Additions.forRealEntity(id, realInts);
+            if (augmented != null) {
+                Map<String, Double> d = new LinkedHashMap<>();
+                augmented.forEach((a, x) -> d.put(a, (double) x));
+                fresh.put(type, d);
+            }
         }
         GUESSES.clear();
         GUESSES.putAll(fresh);

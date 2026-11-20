@@ -49,7 +49,7 @@ final class InterpretedIds {
             Path p = file();
             Files.createDirectories(p.getParent());
             List<String> lines = new ArrayList<>();
-            lines.add("# Items Aspect Interpreter filled in during the last Thaumaturge index build. Do not edit.");
+            lines.add("# Items Aspect Interpreter filled in or added to during the last Thaumaturge index build (excluded from learning). Do not edit.");
             lines.addAll(new TreeSet<>(ids));
             Files.write(p, lines, StandardCharsets.UTF_8);
         } catch (Exception e) {

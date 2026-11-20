@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.5.0
+- **Function layer.** Recipe-derived and interpreted items get a missing function aspect named by the head of their name: barrel → vacuos, lantern → lux, mace → aversio, gearbox → machina. Each pair is checked against the pack's hand-written items.
+- **Every non-Overworld dimension is alien.** Natives get alienis plus a flavour: infernum/ignis for the Nether, vacuos/tenebrae for the End, tenebrae/praecantatio for the Otherside. This now applies to hand-written items and real creature entries too, as additions only, and flows through recipes.
+- **Additions only.** Existing assignments are never replaced or reduced. Hand-written entries only receive dimension additions.
+- **Balance tuning.** Guesses now match the original layer's scarcity:
+  - The keep threshold is lowered from 12% to 8%.
+  - Guesses keep about as many aspects as their close neighbours, so single-aspect guesses rise from 33% to 42% (original: 41%).
+  - Additions are sized by each aspect's median minor share, capped at 20%.
+  - Function and craftsmanship stop at 5 aspects.
+- **Report:** `assignments.txt` lists every addition with its layer. The log counts them by layer.
+- **New config option:** `functionLayer`.
+
 ## 1.4.0
 - **Crafting complexity.** Recipe-derived items, including Thaumaturge's own derivations, now gain craftsmanship for each step beyond the first refinement: ordo for regular forms, machina for machine processing, fabrico for assembly. Oak stairs go from herba 5 to herba 5 + ordo 1. Hand-written entries are never changed.
 - **Defining dimension aspects.** The Nether's signature includes infernum once Thaumic Additions is installed, and Nether natives are guaranteed a point of it. The End's defining aspect is alienis.

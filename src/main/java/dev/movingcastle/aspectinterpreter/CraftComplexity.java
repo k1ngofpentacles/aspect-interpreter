@@ -41,13 +41,11 @@ public final class CraftComplexity {
     private static volatile RecipeManager preparedFor;
     private static final Map<Item, List<Step>> RECIPES = new HashMap<>();
     private static final Map<Item, Integer> DEPTH = new HashMap<>();
-    private static final Map<String, Map<String, Integer>> ADDED = new ConcurrentHashMap<>();
 
     public static synchronized void prepare(RecipeManager recipes, HolderLookup.Provider registries) {
         if (preparedFor == recipes) return;
         RECIPES.clear();
         DEPTH.clear();
-        ADDED.clear();
         for (RecipeHolder<?> holder : recipes.getRecipes()) {
             try {
                 Recipe<?> r = holder.value();
@@ -107,6 +105,7 @@ public final class CraftComplexity {
 
     /** Craftsmanship to add, as aspect id -> amount, for an item whose recipe-derived material totals {@code materialTotal}. */
     static Map<String, Integer> craftsmanship(Item item, int materialTotal) {
+        // hand-written items keep the workmanship their authors chose
         Config cfg = Config.get();
         if (!cfg.craftingComplexity || materialTotal <= 0 || preparedFor == null || hasHandAspects(item)) return Map.of();
         String id = BuiltInRegistries.ITEM.getKey(item).toString();
@@ -126,35 +125,4 @@ public final class CraftComplexity {
         return Map.of(aspect, Math.min(cap, points * per));
     }
 
-    /** Adds craftsmanship to a recipe-derived list (Thaumaturge's or ours). Unknown aspects are skipped. */
-    public static AspectList enrich(Item item, AspectList derived, HolderLookup.Provider registries) {
-        if (derived == null || derived.isEmpty()) return derived;
-        Map<String, Integer> add = craftsmanship(item, derived.totalAmount());
-        if (add.isEmpty()) return derived;
-        Optional<? extends HolderLookup.RegistryLookup<IAspect>> lookup = registries.lookup(InterpreterContributor.ASPECT_REGISTRY);
-        if (lookup.isEmpty()) return derived;
-        AspectList out = derived;
-        for (Map.Entry<String, Integer> e : add.entrySet()) {
-            ResourceLocation rl = ResourceLocation.tryParse(e.getKey());
-            if (rl == null) continue;
-            Optional<? extends Holder<IAspect>> h = lookup.get().get(ResourceKey.create(InterpreterContributor.ASPECT_REGISTRY, rl));
-            if (h.isEmpty()) continue;
-            out = out.add(new AspectInstance(h.get(), e.getValue()));
-        }
-        if (out != derived) ADDED.put(BuiltInRegistries.ITEM.getKey(item).toString(), add);
-        return out;
-    }
-
-    /** Same, for the interpreter's own name-based maps. */
-    static void enrich(Item item, LinkedHashMap<String, Integer> aspects) {
-        int total = 0;
-        for (int x : aspects.values()) total += x;
-        Map<String, Integer> add = craftsmanship(item, total);
-        add.forEach((a, x) -> aspects.merge(a, x, Integer::sum));
-        if (!add.isEmpty()) ADDED.put(BuiltInRegistries.ITEM.getKey(item).toString(), add);
-    }
-
-    static Map<String, Map<String, Integer>> added() {
-        return new TreeMap<>(ADDED);
-    }
 }

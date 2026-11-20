@@ -2713,35 +2713,37 @@
   "on"
  ],
  "dimensions": {
-  "_doc": "Prior meaning of known dimensions, blended with what is learned from objects native to each. An aspect with weight 1.0 is defining: it always joins the signature when the pack has it (e.g. infernum for the Nether once Thaumic Additions is installed), and native objects are guaranteed a point of it. Unlisted dimensions fall back to matching their name against the words above.",
-  "minecraft:the_end": {
-   "thaumaturge:alienis": 1.0,
-   "thaumaturge:tenebrae": 0.5,
-   "thaumaturge:vacuos": 0.3
+  "_doc": "Every dimension except the baseline (the Overworld) is alien: its natives get some alienis. Then each is flavoured. Weight 1.0 = the flavour guaranteed to natives (the first one the pack has and the object lacks); lower weights are extra evidence for interpreted objects. Unlisted dimensions are flavoured by what is learned from their natives, or by matching their name against the lexicon.",
+  "_core": {
+   "thaumaturge:alienis": 1.0
   },
   "minecraft:the_nether": {
    "thaumadditions:infernum": 1.0,
-   "thaumaturge:ignis": 0.8,
+   "thaumaturge:ignis": 0.9,
    "thaumaturge:perditio": 0.3
+  },
+  "minecraft:the_end": {
+   "thaumaturge:vacuos": 1.0,
+   "thaumaturge:tenebrae": 0.9
   },
   "deeperdarker:otherside": {
    "thaumaturge:tenebrae": 1.0,
-   "thaumaturge:alienis": 0.6,
-   "thaumaturge:sensus": 0.4
+   "thaumaturge:praecantatio": 0.9,
+   "thaumaturge:sensus": 0.3
   },
   "aether:the_aether": {
    "thaumaturge:aer": 1.0,
-   "thaumadditions:caeles": 0.6,
+   "thaumadditions:caeles": 0.9,
    "thaumaturge:lux": 0.4
   },
   "twilightforest:twilight_forest": {
-   "thaumaturge:herba": 0.8,
-   "thaumaturge:tenebrae": 0.6,
-   "thaumaturge:praecantatio": 0.5
+   "thaumaturge:herba": 1.0,
+   "thaumaturge:tenebrae": 0.8,
+   "thaumaturge:praecantatio": 0.6
   },
   "madmans_dreams:dream": {
    "madmans_dreams:somnium": 1.0,
-   "thaumaturge:alienis": 0.5
+   "thaumaturge:cognitio": 0.5
   }
  },
  "craftsmanship": {
@@ -2808,5 +2810,220 @@
   ],
   "per_step": 0.06,
   "max_share": 0.3
+ },
+ "functions": {
+  "_doc": "What an object is FOR. Added to recipe-derived and interpreted items whose names call for it, when the aspect is missing. Each word-aspect pair is checked against the pack's hand-written items: if 3 or more of them contain the word and fewer than half carry the aspect, the pack's authors don't do this, and the pair is skipped. Only the head of the name counts (its last word or two, after colour and size words): an armor_stand is a stand, not armour.",
+  "thaumaturge:vacuos": [
+   "chest",
+   "barrel",
+   "crate",
+   "bin",
+   "box",
+   "cask",
+   "keg",
+   "basket",
+   "sack",
+   "bag",
+   "pouch",
+   "jar",
+   "pot",
+   "urn",
+   "vessel",
+   "bucket",
+   "bowl",
+   "bottle",
+   "flask",
+   "vial",
+   "tank",
+   "vault",
+   "cabinet",
+   "cupboard",
+   "drawer",
+   "locker",
+   "trunk",
+   "coffer",
+   "bundle",
+   "backpack",
+   "storage",
+   "container",
+   "hopper",
+   "shelf"
+  ],
+  "thaumaturge:lux": [
+   "lamp",
+   "lantern",
+   "torch",
+   "candle",
+   "chandelier",
+   "sconce",
+   "light",
+   "beacon",
+   "bulb",
+   "candelabra",
+   "streetlight",
+   "lightbulb"
+  ],
+  "thaumaturge:machina": [
+   "gear",
+   "cog",
+   "cogwheel",
+   "shaft",
+   "gearbox",
+   "piston",
+   "engine",
+   "motor",
+   "pump",
+   "valve",
+   "clutch",
+   "crank",
+   "mechanism",
+   "turbine",
+   "dynamo",
+   "conveyor",
+   "deployer",
+   "press",
+   "mixer",
+   "drill",
+   "bearing",
+   "propeller",
+   "gantry",
+   "flywheel"
+  ],
+  "thaumaturge:instrumentum": [
+   "pickaxe",
+   "shovel",
+   "spade",
+   "hoe",
+   "hammer",
+   "wrench",
+   "chisel",
+   "saw",
+   "shears",
+   "knife",
+   "sickle",
+   "scythe",
+   "trowel",
+   "tongs",
+   "tool",
+   "paxel",
+   "multitool",
+   "mattock",
+   "fishing_rod"
+  ],
+  "thaumaturge:aversio": [
+   "sword",
+   "dagger",
+   "spear",
+   "lance",
+   "mace",
+   "halberd",
+   "glaive",
+   "katana",
+   "rapier",
+   "cutlass",
+   "battleaxe",
+   "warhammer",
+   "javelin",
+   "arrow"
+  ],
+  "thaumaturge:praemunio": [
+   "helmet",
+   "helm",
+   "chestplate",
+   "leggings",
+   "greaves",
+   "boots",
+   "shield",
+   "armor",
+   "armour",
+   "buckler",
+   "gauntlet",
+   "cuirass"
+  ],
+  "thaumaturge:cognitio": [
+   "book",
+   "tome",
+   "scroll",
+   "journal",
+   "diary",
+   "map",
+   "atlas",
+   "lectern",
+   "bookshelf",
+   "codex",
+   "page",
+   "notebook",
+   "manual",
+   "grimoire"
+  ],
+  "thaumaturge:sensus": [
+   "music_box",
+   "painting",
+   "music_disc",
+   "disc",
+   "jukebox",
+   "bell",
+   "note_block",
+   "spyglass",
+   "telescope",
+   "speaker"
+  ],
+  "thaumaturge:motus": [
+   "rail",
+   "minecart",
+   "cart",
+   "wheel",
+   "boat",
+   "raft",
+   "wagon",
+   "carriage",
+   "sled",
+   "skateboard",
+   "elevator",
+   "lift"
+  ],
+  "thaumaturge:vinculum": [
+   "chain",
+   "cage",
+   "trap",
+   "lock",
+   "leash",
+   "lead",
+   "net",
+   "shackle",
+   "cobweb",
+   "snare"
+  ],
+  "thaumaturge:ignis": [
+   "furnace",
+   "stove",
+   "oven",
+   "kiln",
+   "brazier",
+   "campfire",
+   "fireplace",
+   "forge",
+   "smelter",
+   "grill",
+   "burner",
+   "hearth",
+   "boiler"
+  ],
+  "thaumaturge:potentia": [
+   "battery",
+   "capacitor",
+   "generator",
+   "accumulator",
+   "coil",
+   "fuel"
+  ],
+  "thaumaturge:fabrico": [
+   "workbench",
+   "crafting_table",
+   "loom",
+   "station",
+   "workstation",
+   "bench"
+  ]
  }
 }

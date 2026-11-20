@@ -15,7 +15,14 @@ import java.util.*;
  * Callers may add further evidence (recipes, block material, mob category) as {@link Source}s.
  */
 final class Model {
-    static final double SIM_MIN = 0.30, KEEP = 0.12, W_LEX = 0.5, W_KNN = 1.5, W_TOK = 0.6;
+    static final double SIM_MIN = 0.30, W_LEX = 0.5, W_KNN = 1.5, W_TOK = 0.6;
+    /** Minimum share an aspect needs to be kept. Tuned so guesses carry as many aspects as the original layer. */
+    static double KEEP = 0.08;
+    /** Scarcity prior: aspect weights are multiplied by prevalence^beta, so rare aspects need stronger evidence. */
+    static double SCARCITY_BETA = 0.0;
+    /** Keep about as many aspects as the nearest assigned neighbours carry (the original layer's local scarcity). */
+    static boolean NEIGHBOUR_COUNT = true;
+    private static final double PREVALENCE_FLOOR = 0.003;
     static final int K = 5, MAX_ASPECTS = 4;
     private static final double LN_ASPECTS = Math.log(46);
 
@@ -30,6 +37,8 @@ final class Model {
     private final Map<String, Double> idf = new HashMap<>();
     private final Map<String, Profile> profiles = new HashMap<>();
     private final Map<String, Set<String>> tokenSets = new HashMap<>();
+    /** Fraction of training objects carrying each aspect: the original layer's scarcity. */
+    final Map<String, Double> prevalence = new HashMap<>();
 
     Model(Map<String, Map<String, Double>> train, Lexicon lex) {
         this.train = train;
@@ -49,6 +58,7 @@ final class Model {
             }
         }
         int n = train.size();
+        for (Map<String, Double> v : train.values()) for (String a : v.keySet()) prevalence.merge(a, 1.0 / Math.max(1, n), Double::sum);
         inverted.forEach((t, r) -> idf.put(t, Math.log((n + 1.0) / (r.size() + 1.0)) + 1));
         sums.forEach((t, s) -> {
             List<Double> tl = totals.get(t);
@@ -102,7 +112,7 @@ final class Model {
         }
         sims.sort((a, b) -> Double.compare(b[0], a[0]));
         Map<String, Double> knn = new HashMap<>();
-        double kt = 0, ks = 0, best = 0;
+        double kt = 0, ks = 0, best = 0, kc = 0;
         for (int i = 0; i < Math.min(K, sims.size()); i++) {
             double sim = sims.get(i)[0];
             if (sim < SIM_MIN) break;
@@ -112,6 +122,7 @@ final class Model {
             double fs = sim;
             v.forEach((a, x) -> knn.merge(a, fs * x / tot, Double::sum));
             kt += sim * tot;
+            kc += sim * v.size();
             ks += sim;
         }
 
@@ -154,13 +165,26 @@ final class Model {
             s.dist().forEach((a, x) -> dist.merge(a, w * x, Double::sum));
             if (s.weight() > basisW) { basisW = s.weight(); basis = s.name(); }
         }
+        if (SCARCITY_BETA != 0) {
+            dist.replaceAll((a, x) -> x * Math.pow(prevalence.getOrDefault(a, 0.0) + PREVALENCE_FLOOR, SCARCITY_BETA));
+            double z0 = 0;
+            for (double x : dist.values()) z0 += x;
+            if (z0 > 0) { final double zz = z0; dist.replaceAll((a, x) -> x / zz); }
+        }
         double totalAmount = forcedTotal != null ? forcedTotal
                 : ks > 0 ? kt / ks : tsum > 0 ? tt / tsum : fallbackTotal;
 
         List<Map.Entry<String, Double>> ranked = new ArrayList<>(dist.entrySet());
         ranked.sort((a, b) -> Double.compare(b.getValue(), a.getValue()));
+        // how many aspects: as many as the neighbours typically carry, when they are close enough to say
+        int limit = MAX_ASPECTS;
+        double keep = KEEP;
+        if (NEIGHBOUR_COUNT && ks > 0 && best >= 0.5) {
+            limit = (int) Math.max(1, Math.min(MAX_ASPECTS, Math.round(kc / ks)));
+            keep = Math.min(KEEP, 0.04);
+        }
         List<Map.Entry<String, Double>> kept = new ArrayList<>();
-        for (Map.Entry<String, Double> e : ranked) if (e.getValue() >= KEEP && kept.size() < MAX_ASPECTS) kept.add(e);
+        for (Map.Entry<String, Double> e : ranked) if (e.getValue() >= keep && kept.size() < limit) kept.add(e);
         if (kept.isEmpty()) kept.add(ranked.get(0));
         double z = 0;
         for (Map.Entry<String, Double> e : kept) z += e.getValue();

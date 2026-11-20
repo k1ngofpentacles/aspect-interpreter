@@ -22,6 +22,8 @@ final class Config {
     double minConfidence = 0.15;
     /** Write config/aspect_interpreter/assignments.txt after each reload so you can review guesses. */
     boolean writeReport = true;
+    /** Add a missing function aspect (container -> vacuos, lamp -> lux...) to recipe-derived and interpreted items. */
+    boolean functionLayer = true;
     /** Add craftsmanship (ordo/fabrico/machina) for each crafting step beyond the first refinement, on recipe-derived items. */
     boolean craftingComplexity = true;
     /** Use where an object spawns, generates or drops (which dimension) as evidence. */

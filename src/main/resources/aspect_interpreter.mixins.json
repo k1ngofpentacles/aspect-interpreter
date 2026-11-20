@@ -3,6 +3,6 @@
   "minVersion": "0.8",
   "package": "dev.movingcastle.aspectinterpreter.mixin",
   "compatibilityLevel": "JAVA_21",
-  "mixins": ["EntityAspectsMixin", "CraftingAspectContributorMixin"],
+  "mixins": ["EntityAspectsMixin", "CraftingAspectContributorMixin", "AspectIndexBuilderMixin"],
   "injectors": { "defaultRequire": 1 }
 }
