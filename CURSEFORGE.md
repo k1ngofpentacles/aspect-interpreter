@@ -12,7 +12,7 @@
 
 ## File upload
 
-* **File:** `aspect\\\_interpreter-1.2.0-neoforge-1.21.1.jar`
+* **File:** `aspect_interpreter-1.7.0-neoforge-1.21.1.jar`
 * **Release type:** Beta. It has run in one large pack; Beta sets expectations while others test it.
 * **Game version:** 1.21.1
 * **Mod loader:** NeoForge
