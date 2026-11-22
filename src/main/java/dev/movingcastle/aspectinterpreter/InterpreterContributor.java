@@ -7,7 +7,9 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.SpawnEggItem;
 import net.minecraft.world.item.crafting.Ingredient;
@@ -161,9 +163,50 @@ final class InterpreterContributor implements IAspectRecipeContributor {
             extra.add(new Model.Source("egg", Map.of("thaumaturge:victus", 1.0), 0.4));
             if (forcedTotal == null) forcedTotal = 10.0;
         }
-        Model.Prediction p = Knowledge.items().predict(id, extra, 8, forcedTotal);
+        Set<String> ignored = Materials.uncorroborated(Knowledge.LEXICON, Tokens.of(id), m -> corroborated(item, m));
+        Model.Prediction p = Knowledge.items().predict(id, extra, 8, forcedTotal, ignored);
         if (p != null) Additions.forGuess(item, id, p.aspects());
         return p;
+    }
+
+    private static Map<SoundType, String> soundNames;
+
+    /** SoundType constants by field name (WOOD, NETHER_WOOD...), built once. */
+    private static synchronized Map<SoundType, String> soundNames() {
+        if (soundNames == null) {
+            Map<SoundType, String> m = new IdentityHashMap<>();
+            for (java.lang.reflect.Field f : SoundType.class.getFields()) {
+                try {
+                    if (java.lang.reflect.Modifier.isStatic(f.getModifiers()) && f.getType() == SoundType.class) m.put((SoundType) f.get(null), f.getName());
+                } catch (ReflectiveOperationException ignored) {}
+            }
+            soundNames = m;
+        }
+        return soundNames;
+    }
+
+    /** Does the item itself show it is of this material: its block sound, one of its tags, or an ingredient's tag? */
+    private boolean corroborated(Item item, Materials.Material m) {
+        try {
+            if (item instanceof BlockItem bi) {
+                String s = soundNames().get(bi.getBlock().defaultBlockState().getSoundType());
+                if (s != null && m.sounds().contains(s)) return true;
+            }
+            if (hasTag(item, m)) return true;
+            for (Recipe<?> r : byOutput.getOrDefault(item, List.of())) {
+                for (Ingredient ing : r.getIngredients()) {
+                    ItemStack[] opts = ing.getItems();
+                    for (int i = 0; i < Math.min(MAX_OPTIONS_PER_INGREDIENT, opts.length); i++) {
+                        if (opts[i].getItem() != item && hasTag(opts[i].getItem(), m)) return true;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
+        return false;
+    }
+
+    private static boolean hasTag(Item item, Materials.Material m) {
+        return item.builtInRegistryHolder().tags().anyMatch(t -> Materials.tagMatches(m.tags(), t.location().toString()));
     }
 
     static final ResourceKey<net.minecraft.core.Registry<IAspect>> ASPECT_REGISTRY = TTAspects.AER.registryKey();

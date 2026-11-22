@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.8.0
+- **Material words must earn their place.** A word such as "crimson" or "warped" (or an overworld wood name) counts as a material in an item's name only if the item corroborates it: a wooden block sound, an item tag (logs, planks, saplings, leaves, `wooden_*`, `*_stems`...) or a recipe ingredient carrying one. Otherwise the name model ignores the word, so `crimson_blade`, crimson helms and robes and `alexsmobs:warped_*` food are no longer read as crimson wood (herba). Items with evidence behave as before. Known miss: banners have the wood sound, so `banner_crimson_cult` still counts as wood.
+- New `materials` section in `lexicon.json` (wood only for now): words, sounds, tags. New `Materials` class; `Model.predict` takes the ignored words.
+- First unit tests (JUnit, plain Java): the crimson cases and real-wood non-regression.
+
 ## 1.7.0
 - **Family consistency.** Similar items now share their key aspects. The recipe rule loses a defining aspect when no ingredient carries it: vanilla candles are hand-written lux, but Forestry's big and jumbo candles and Thaumaturge's own coloured candles are crafted from wax and dye and came out with no lux. Crafted and interpreted items of any mod now take up to 2 key aspects from their hand-written relatives. Hand-written items are never changed.
   - **Families** are head nouns, found per mod first, then across the pack. A word counts as a head only if it mostly ends names, so `big_candle_red` and `jumbo_candle_refractory` are candles, a `copper_candle_holder` is a holder, and a potato cannon is not a potato.

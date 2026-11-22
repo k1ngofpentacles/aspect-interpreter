@@ -38,6 +38,8 @@ final class Lexicon {
     final Map<String, Map<String, Double>> habitats = new LinkedHashMap<>();
     /** Shaping and preparation words that never name a family (cut, polished, roasted...). */
     final Set<String> familyModifiers = new HashSet<>();
+    /** Material families whose words only count with evidence (sound, tag, ingredient); see {@link Materials}. */
+    final Map<String, Materials.Material> materials = new LinkedHashMap<>();
     private volatile Map<String, Double> calibration = Map.of();
 
     static Lexicon load() {
@@ -51,6 +53,17 @@ final class Lexicon {
                 for (JsonElement w : craft.getAsJsonArray("form_words")) lex.formWords.add(Tokens.norm(w.getAsString()));
                 if (craft.has("per_step")) lex.craftPerStep = craft.get("per_step").getAsDouble();
                 if (craft.has("max_share")) lex.craftMaxShare = craft.get("max_share").getAsDouble();
+            }
+            JsonObject mats = root.getAsJsonObject("materials");
+            if (mats != null) for (Map.Entry<String, JsonElement> m : mats.entrySet()) {
+                if (!m.getValue().isJsonObject()) continue; // _doc
+                JsonObject o = m.getValue().getAsJsonObject();
+                Set<String> words = new LinkedHashSet<>(), sounds = new LinkedHashSet<>();
+                List<String> tags = new ArrayList<>();
+                for (JsonElement w : o.getAsJsonArray("words")) words.add(Tokens.norm(w.getAsString()));
+                for (JsonElement w : o.getAsJsonArray("sounds")) sounds.add(w.getAsString());
+                for (JsonElement w : o.getAsJsonArray("tags")) tags.add(w.getAsString());
+                lex.materials.put(m.getKey(), new Materials.Material(m.getKey(), words, sounds, tags));
             }
             JsonObject dims = root.getAsJsonObject("dimensions");
             if (dims != null) for (Map.Entry<String, JsonElement> d : dims.entrySet()) {

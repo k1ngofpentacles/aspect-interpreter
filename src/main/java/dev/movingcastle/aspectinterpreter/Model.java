@@ -83,7 +83,13 @@ final class Model {
     }
 
     Prediction predict(String id, List<Source> extra, double fallbackTotal, Double forcedTotal) {
+        return predict(id, extra, fallbackTotal, forcedTotal, Set.of());
+    }
+
+    /** {@code ignoredWords}: name words the item gave no evidence for (see {@link Materials}); they count as no word at all. */
+    Prediction predict(String id, List<Source> extra, double fallbackTotal, Double forcedTotal, Set<String> ignoredWords) {
         List<String> tokens = Tokens.of(id);
+        if (!ignoredWords.isEmpty()) tokens.removeIf(ignoredWords::contains);
         Set<String> T = new LinkedHashSet<>(tokens);
         String ns = Tokens.namespace(id);
 

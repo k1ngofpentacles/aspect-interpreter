@@ -1,5 +1,13 @@
 {
  "_doc": "What each aspect evokes (written for this mod), as name fragments. Weights are word:weight (default 1). Words are matched after singularising and splitting IDs on _ / - .",
+ "materials": {
+  "_doc": "Material words that only count when the item corroborates them (block sound, item tag, or an ingredient carrying the tag). Without evidence the word is a name, not a material, and is ignored by the name model. Wood only for now.",
+  "wood": {
+   "words": ["crimson", "warped", "oak", "spruce", "birch", "jungle", "acacia", "cherry", "mangrove", "bamboo"],
+   "sounds": ["WOOD", "NETHER_WOOD", "STEM", "BAMBOO_WOOD", "CHERRY_WOOD", "BAMBOO"],
+   "tags": ["minecraft:logs", "minecraft:planks", "minecraft:saplings", "minecraft:leaves", "minecraft:wooden_*", "minecraft:*_logs", "minecraft:*_stems", "minecraft:*_planks"]
+  }
+ },
  "aspects": {
   "thaumaturge:aer": {
    "meaning": "air and wind",

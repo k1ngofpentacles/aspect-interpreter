@@ -13,6 +13,7 @@ base {
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
 repositories {
+    mavenCentral()
     maven {
         url = 'https://cursemaven.com'
         content { includeGroup 'curse.maven' }
@@ -42,6 +43,11 @@ dependencies {
     } else {
         compileOnly fileTree(dir: 'libs', include: '*.jar')
     }
+    // plain-Java unit tests (Model, Lexicon, Tokens, Materials need no Minecraft)
+    testImplementation platform('org.junit:junit-bom:5.10.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'com.google.code.gson:gson:2.10.1'
 }
 
 tasks.withType(JavaCompile).configureEach {
@@ -49,6 +55,10 @@ tasks.withType(JavaCompile).configureEach {
     options.release = 21
     // No mixin annotation processor: the mod targets Mojang-named classes only, so it needs no refmap.
     options.compilerArgs << '-proc:none'
+}
+
+test {
+    useJUnitPlatform()
 }
 
 jar {
