@@ -12,7 +12,7 @@
 
 ## File upload
 
-* **File:** `aspect_interpreter-1.7.0-neoforge-1.21.1.jar`
+* **File:** `aspect_interpreter-1.8.0-neoforge-1.21.1-1.8.0.jar` (from `build/libs/`)
 * **Release type:** Beta. It has run in one large pack; Beta sets expectations while others test it.
 * **Game version:** 1.21.1
 * **Mod loader:** NeoForge
@@ -23,7 +23,7 @@
   * Thaumaturge: *Required Dependency*
   * Thaumic Additions Community Edition: *Optional Dependency*
   * Madman's Dreams: *Optional Dependency*
-* **Changelog:** paste the 1.7.0 section of `CHANGELOG.md`.
+* **Changelog:** paste the 1.8.0 section of `CHANGELOG.md`.
 
 ## Description 
 
@@ -36,7 +36,7 @@ Thaumaturge assigns aspects from a hand-written list plus recipes. Anything outs
 It reads what your pack already does and applies the same pattern to the gaps:
 
 * **Similar objects:** an andesite roof variant takes after other andesite blocks.
-* **Words in the name:** each word's aspect mix is learned from your pack.
+* **Words in the name:** each word's aspect mix is learned from your pack. Material words such as "crimson" or "oak" count only when the item shows it is that material (its block sound, tags or recipe), so a crimson sword is not read as crimson wood.
 * **Meaning:** a table of what each aspect means, calibrated against your pack so misleading words lose influence.
 * **Physical properties:** recipes of any type, block material, food, tools, armour, and mob category and size.
 
