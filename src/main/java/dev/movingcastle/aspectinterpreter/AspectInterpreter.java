@@ -26,10 +26,12 @@ import java.security.MessageDigest;
 @Mod(AspectInterpreter.MODID)
 public final class AspectInterpreter {
     public static final String MODID = "aspect_interpreter";
-    static final String VERSION = "1.7.0";
+    /** The jar's version (from the manifest via mods.toml); part of the cache signature, so every release rebuilds once. */
+    static volatile String VERSION = "dev";
     static final Logger LOG = LogUtils.getLogger();
 
     public AspectInterpreter(IEventBus modBus, ModContainer container) {
+        VERSION = container.getModInfo().getVersion().toString();
         modBus.addListener(RegisterAspectContributorsEvent.class, e -> e.register(new InterpreterContributor()));
         modBus.addListener(RegisterPayloadHandlersEvent.class, e -> e.registrar("1").playToClient(
                 EntityTablePayload.TYPE, EntityTablePayload.CODEC,

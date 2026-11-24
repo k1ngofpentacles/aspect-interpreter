@@ -39,6 +39,8 @@ final class InterpreterContributor implements IAspectRecipeContributor {
     private static volatile boolean building;
     private static long buildNanos;
     private static int asked, filled;
+    /** Ingredient id -> ids of items made from it, for the items derived from our guesses. */
+    private static volatile Map<String, Set<String>> products = Map.of();
 
     @Override
     public void beginBuild(RecipeManager recipes, HolderLookup.Provider registries) {
@@ -58,6 +60,7 @@ final class InterpreterContributor implements IAspectRecipeContributor {
         buildNanos = 0;
         building = true;
         if (!Config.get().items) return;
+        Map<String, Set<String>> made = new HashMap<>();
         for (RecipeHolder<?> holder : recipes.getRecipes()) {
             try {
                 Recipe<?> r = holder.value();
@@ -65,10 +68,20 @@ final class InterpreterContributor implements IAspectRecipeContributor {
                 if (out == null || out.isEmpty()) continue;
                 List<Recipe<?>> l = byOutput.computeIfAbsent(out.getItem(), k -> new ArrayList<>(2));
                 if (l.size() < MAX_RECIPES_PER_ITEM) l.add(r);
+                // ingredient -> product, through the options Thaumaturge (first) and this contributor (first two) read
+                String outId = BuiltInRegistries.ITEM.getKey(out.getItem()).toString();
+                for (Ingredient ing : r.getIngredients()) {
+                    ItemStack[] opts = ing.getItems();
+                    for (int i = 0; i < Math.min(MAX_OPTIONS_PER_INGREDIENT, opts.length); i++) {
+                        String in = BuiltInRegistries.ITEM.getKey(opts[i].getItem()).toString();
+                        if (!in.equals(outId)) made.computeIfAbsent(in, k -> new HashSet<>(2)).add(outId);
+                    }
+                }
             } catch (Throwable ignored) {
                 // some recipe types need a level for getResultItem; skip them
             }
         }
+        products = made;
         buildNanos += System.nanoTime() - t0;
     }
 
@@ -76,12 +89,17 @@ final class InterpreterContributor implements IAspectRecipeContributor {
     static void finishBuildIfDone() {
         if (!building) return;
         building = false;
-        AspectInterpreter.LOG.info("Aspect Interpreter: filled {} of {} unresolved items; additions: {}; {} ms of our own work inside Thaumaturge's index build",
-                filled, asked, Additions.summary(), buildNanos / 1_000_000);
-        // never learn from our own work: exclude guessed items and items we added to from future cache learning
-        Set<String> ours = new HashSet<>(FILLED);
-        ours.addAll(Additions.itemIds());
-        InterpretedIds.save(ours);
+        // never learn from our own work: exclude guessed items, items we added to, and everything Thaumaturge
+        // derived from them, from future cache learning
+        Set<String> roots = new HashSet<>(FILLED);
+        roots.addAll(Additions.itemIds());
+        Set<String> ours = InterpretedIds.downstream(roots, products);
+        ours.removeAll(Knowledge.authored.keySet()); // hand-written values are learned from the data maps anyway
+        int derived = Math.max(0, ours.size() - roots.size());
+        AspectInterpreter.LOG.info("Aspect Interpreter: filled {} of {} unresolved items; additions: {}; {} items derived from those are kept out of learning; {} ms of our own work inside Thaumaturge's index build",
+                filled, asked, Additions.summary(), derived, buildNanos / 1_000_000);
+        InterpretedIds.save(ours, derived);
+        products = Map.of();
         AspectInterpreter.recordBuild(Knowledge.learnedFromCache > 0);
         AssignmentLog.write();
     }
@@ -164,7 +182,7 @@ final class InterpreterContributor implements IAspectRecipeContributor {
             if (forcedTotal == null) forcedTotal = 10.0;
         }
         Set<String> ignored = Materials.uncorroborated(Knowledge.LEXICON, Tokens.of(id), m -> corroborated(item, m));
-        Model.Prediction p = Knowledge.items().predict(id, extra, 8, forcedTotal, ignored);
+        Model.Prediction p = Knowledge.items().predict(id, extra, 8, forcedTotal, ignored, ItemFeatures.kind(item));
         if (p != null) Additions.forGuess(item, id, p.aspects());
         return p;
     }

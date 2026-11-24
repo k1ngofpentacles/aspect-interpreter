@@ -193,3 +193,15 @@ Similar objects share their defining aspect in the hand-written data: every vani
 | trapdoor | motus | 43 |
 | wool | fabrico | 32 |
 | door | vinculum, machina | 17 |
+
+## 10. Never learn second-hand (1.9.0)
+
+Thaumaturge's recipe rule carries an ingredient's aspects into everything made from it. So a guessed leaf does not stay one guess: it becomes part of every product, and the cache then holds those products as if their authors had written them. Learning from them closes a loop. A rich guess makes rich products, rich products make the next guess richer, and the pack drifts upward each launch until items sit at Thaumaturge's 500 cap. In the author's pack, items totalling 1,000 or more went from 19 to 262 between two launches. The hand-written layer never goes above 100 (bedrock); its 99th percentile is 67.
+
+Three rules follow:
+
+- **Train only on authored data, or data derived only from it.** Everything downstream of a guess or an addition, through any recipe, is excluded from learning.
+- **No guess outweighs the authors.** A name-based guess is capped at the largest hand-written total in the running pack. It takes the weighted median of its neighbours' totals, so a single outlier can't set the size.
+- **Similar names are not similar things across kinds.** "raw" means ore on an item and meat on food. Neighbours of another kind (food, gear, other) count half.
+
+The same caution applies to dimensions. A dimension built from overworld biomes (Thaumaturge Tinker's Bedrock dimension is one flat beach) says nothing about the mobs of those biomes, so borrowed biomes are credited to the overworld.

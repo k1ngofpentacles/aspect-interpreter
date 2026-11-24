@@ -41,7 +41,7 @@ A separate list of neutral words (colours, shapes, sizes) is ignored for meaning
 
 | Source | What it does | Weight |
 |---|---|---|
-| Neighbours | The 5 most similar assigned IDs, scored by weighted word overlap (weight = word rarity × word consistency, so materials outweigh shapes). They also supply the amount. | 1.5 × best similarity |
+| Neighbours | The 5 most similar assigned IDs, scored by weighted word overlap (weight = word rarity × word consistency, so materials outweigh shapes). A neighbour of another kind (food, gear, or anything else; blocks and plain items count as one kind) counts at half similarity, so `raw_bison` doesn't learn from `raw_iron`. They also supply the amount. | 1.5 × best similarity |
 | Word profiles | The average aspect mix of all assigned IDs containing each word, discounted for rare or inconsistent words | 0.6 |
 | Meaning | Lexicon matches, longest phrase first (`dark_oak` consumes `dark`). Each keyword is calibrated against how often its aspect actually appears on assigned items containing it. | 0.5, scaled up when no close neighbour exists |
 | Recipes (items) | Any recipe type producing the item whose ingredients resolve (≥50%), at 75% of the inputs. | 2.0 × fraction resolved |
@@ -52,7 +52,7 @@ A separate list of neutral words (colours, shapes, sizes) is ignored for meaning
 
 **3. Blend.** Take the weighted average of the distributions. When close neighbours exist (similarity ≥ 0.5), keep about as many aspects as they carry. Otherwise keep aspects holding at least 8% of the mass, up to 4. Both settings were tuned to the original layer's balance; see `PHILOSOPHY.md` section 6.
 
-**4. Size the amount.** Use the neighbours' typical total, else the word profiles' median, else 8 for items. For entities, use 25 scaled by body volume, then multiplied by the mob's rarity (see Mob enrichment).
+**4. Size the amount.** Use the similarity-weighted median of the neighbours' totals, else the word profiles' median, else 8 for items. A name-based total is capped at the largest hand-written item total in the running pack (100 with Thaumaturge 1.1.0). Recipe totals follow Thaumaturge's own rule and are not capped. For entities, use 25 scaled by body volume, then multiplied by the mob's rarity (see Mob enrichment).
 
 **5. Score confidence.** Confidence = total evidence weight ÷ 2, capped at 1. Below `minConfidence` (default 0.15), the ID is left unassigned.
 
@@ -145,7 +145,7 @@ At each server start and reload, the mod reads, for every dimension:
 - **Items from creatures:** what every mob drops (its loot table), and which items are named after a mob (`cosmic_cod_bucket`, `spawn_egg_cosmic_cod`).
 - **Blocks:** which ones its terrain and features place. These are used only to learn what an unlisted dimension is like; blocks never receive dimension aspects.
 
-The Overworld is the baseline (configurable) and carries no meaning of its own. Every other dimension is alien, except **underworlds** (the Nether: this world's below, not an outer world). Signatures and pools are in `lexicon.json` under `dimensions`. For dimensions it doesn't list, flavours are learned from already-assigned natives: aspects at least 3× over-represented and at least 5% of the mix, with families of variants counted once. `dimensionAspects` in the config can set any dimension's flavours by hand. The resulting signatures are logged at startup.
+The Overworld is the baseline (configurable) and carries no meaning of its own. A biome the baseline generates, or one tagged `minecraft:is_overworld` or `c:is_overworld`, is credited to the baseline in every dimension that uses it, and its features are not counted for that dimension. Thaumaturge Tinker's Bedrock dimension, for example, is one flat `minecraft:beach`, and it does not make beach mobs alien. Every other dimension is alien, except **underworlds** (the Nether: this world's below, not an outer world). Signatures and pools are in `lexicon.json` under `dimensions`. For dimensions it doesn't list, flavours are learned from already-assigned natives: aspects at least 3× over-represented and at least 5% of the mix, with families of variants counted once. `dimensionAspects` in the config can set any dimension's flavours by hand. The resulting signatures are logged at startup.
 
 ## Crafting complexity
 
@@ -164,7 +164,7 @@ The shape words and percentages are editable in `lexicon.json` under `craftsmans
 Nothing from other mods is bundled with the mod. It learns entirely from the player's own installation:
 
 - **Live data maps:** the `base_aspects` and `entity_aspects` entries of every installed mod and datapack.
-- **Thaumaturge's index cache:** Thaumaturge's own resolved index at `config/thaumaturge/aspect_index.json`, minus every item this mod filled in or added to, so it never learns from its own work.
+- **Thaumaturge's index cache:** Thaumaturge's own resolved index at `config/thaumaturge/aspect_index.json`, minus every item this mod filled in or added to, and every item made from those through any recipe (first two options of each ingredient), so it never learns from its own work, not even second-hand. The list is saved to `config/aspect_interpreter/interpreted_items.txt`. A list from before 1.9.0 lacks the derived items, so its cache is not learned from: that launch learns from data maps only, and the next rebuilds from the clean index.
 
 The model is recalibrated at every reload, so it adapts to each pack's own conventions. A fresh install has no cache on its first launch and learns from data maps only. On the second launch it rebuilds once more, now with the full index to learn from. Set `learnFromThaumaturgeCache: false` to use data maps only.
 

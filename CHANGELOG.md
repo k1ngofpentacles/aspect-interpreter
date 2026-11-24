@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.9.0
+- **Fixed runaway aspect amounts.** The interpreter learned from Thaumaturge's index cache, excluding the items it guessed itself but not the items Thaumaturge then crafted from those guesses. Each launch it learned its own guesses second-hand and guessed a little richer, so minor items crept up to hundreds of each aspect (in the author's pack, items totalling 1,000+ went from 19 to 262 between two launches, and 232 sat at Thaumaturge's 500 cap). Every item derived through recipes from a guess or an addition is now kept out of learning too.
+- **One-time reset.** A cache from an older version may hold second-hand guesses, so the first launch of 1.9.0 learns from data maps only. The next launch rebuilds once more from the clean index, as on a fresh install.
+- **Guess sizes are bounded.** A guess takes the weighted median of its neighbours' totals, not the mean, so one outlying neighbour can't set it. Name-based guesses never exceed the largest hand-written total in the pack (100 with Thaumaturge 1.1.0). Recipe-based totals follow Thaumaturge's own rule and aren't capped.
+- **Neighbours of another kind count half.** Food, gear and everything else are kept apart when finding similar names, so `raw_bison` no longer takes metallum from `raw_iron`. Blocks and plain items stay one kind, so a material still pairs with its block.
+- **Borrowed biomes belong to the overworld.** A dimension made of overworld biomes (Thaumaturge Tinker's Bedrock dimension is one flat beach) no longer turns their mobs into alien natives. A biome the baseline dimension generates, or one tagged `is_overworld`, is credited to the baseline wherever it appears. In the author's pack this had given 91 beach-mob items alienis and praemunio (lobster pasta, centipede legs).
+- The mod's reported version now comes from the jar. 1.8.0 still reported itself as 1.7.0, so its install did not trigger a rebuild.
+- Unit tests for each fix (`InflationGuardTest`).
+
 ## 1.8.0
 - **Material words must earn their place.** A word such as "crimson" or "warped" (or an overworld wood name) counts as a material in an item's name only if the item corroborates it: a wooden block sound, an item tag (logs, planks, saplings, leaves, `wooden_*`, `*_stems`...) or a recipe ingredient carrying one. Otherwise the name model ignores the word, so `crimson_blade`, crimson helms and robes and `alexsmobs:warped_*` food are no longer read as crimson wood (herba). Items with evidence behave as before. Known miss: banners have the wood sound, so `banner_crimson_cult` still counts as wood.
 - New `materials` section in `lexicon.json` (wood only for now): words, sounds, tags. New `Materials` class; `Model.predict` takes the ignored words.

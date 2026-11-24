@@ -9,6 +9,7 @@ import com.leclowndu93150.thaumaturge.api.aspect.AspectInstance;
 import com.leclowndu93150.thaumaturge.api.aspect.AspectList;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Item;
 import net.neoforged.fml.loading.FMLPaths;
@@ -24,7 +25,8 @@ import java.util.*;
  * <ul>
  *   <li>Live {@code base_aspects} / {@code entity_aspects} data maps (always).</li>
  *   <li>Thaumaturge's own resolved index cache on disk, if one exists, minus every item this mod
- *       interpreted itself (so the model never learns from its own guesses).</li>
+ *       interpreted or added to, and every item crafted from those (so the model never learns from its own
+ *       guesses, even second-hand).</li>
  * </ul>
  * A fresh install has no cache yet; it learns from data maps only, and the next launch rebuilds
  * once more with the richer index (see {@link AspectInterpreter}).
@@ -66,8 +68,11 @@ final class Knowledge {
         Config cfg = Config.get();
         Map<String, Map<String, Double>> items = new HashMap<>();
         learnedFromCache = 0;
-        if (cfg.learnFromThaumaturgeCache) {
-            Set<String> ours = InterpretedIds.load();
+        Set<String> ours = cfg.learnFromThaumaturgeCache ? InterpretedIds.load() : null;
+        if (cfg.learnFromThaumaturgeCache && ours == null)
+            AspectInterpreter.LOG.info("Aspect Interpreter: the last index build did not record which items were derived from its guesses; "
+                    + "learning from data maps only this launch, and from the clean index on the next");
+        if (ours != null) {
             for (Map.Entry<String, Map<String, Double>> e : readThaumaturgeCache().entrySet()) {
                 if (ours.contains(e.getKey())) continue;
                 items.put(e.getKey(), e.getValue());
@@ -102,11 +107,19 @@ final class Knowledge {
         }
         LEXICON.calibrate(items);
         FunctionLayer.calibrate(hand);
-        itemModel = new Model(items, LEXICON);
+        double maxHand = 0;
+        for (Map<String, Double> v : hand.values()) maxHand = Math.max(maxHand, Model.total(v));
+        Map<String, String> kinds = new HashMap<>();
+        for (String id : items.keySet()) {
+            ResourceLocation rl = ResourceLocation.tryParse(id);
+            if (rl == null) continue;
+            BuiltInRegistries.ITEM.getOptional(rl).ifPresent(it -> kinds.put(id, ItemFeatures.kind(it)));
+        }
+        itemModel = new Model(items, LEXICON).withKinds(kinds).withMaxTotal(maxHand);
         entityModel = new Model(entities, LEXICON);
         stale = false;
-        AspectInterpreter.LOG.info("Aspect Interpreter learned from {} items ({} from Thaumaturge's index cache) and {} entities in {} ms",
-                items.size(), learnedFromCache, entities.size(), (System.nanoTime() - t0) / 1_000_000);
+        AspectInterpreter.LOG.info("Aspect Interpreter learned from {} items ({} from Thaumaturge's index cache; name-based totals capped at {}) and {} entities in {} ms",
+                items.size(), learnedFromCache, (int) maxHand, entities.size(), (System.nanoTime() - t0) / 1_000_000);
     }
 
     /** Reads Thaumaturge's index cache (or the copy this mod set aside). Returns item id -> aspect -> amount. */

@@ -37,6 +37,22 @@ final class Model {
     private final Map<String, Double> idf = new HashMap<>();
     private final Map<String, Profile> profiles = new HashMap<>();
     private final Map<String, Set<String>> tokenSets = new HashMap<>();
+    /** Coarse kind of each training object (food, gear, other); see {@link #coarseKind}. Missing = unknown. */
+    private Map<String, String> kinds = Map.of();
+    /** Ceiling for a name-based total: the largest hand-written total in the pack. Recipe and forced totals are exempt. */
+    private double maxTotal = Double.POSITIVE_INFINITY;
+    /** Similarity factor for a neighbour of a different coarse kind (raw beef is not raw iron). */
+    static final double KIND_MISMATCH = 0.5;
+
+    /** Food, gear (tools, weapons, armour) or other; blocks and plain items share "other" so materials still pair with their blocks. */
+    static String coarseKind(String kind) {
+        if (kind == null) return null;
+        return kind.equals("food") || kind.equals("gear") ? kind : "other";
+    }
+
+    Model withKinds(Map<String, String> kinds) { this.kinds = kinds; return this; }
+    Model withMaxTotal(double max) { if (max > 0) this.maxTotal = max; return this; }
+    double maxTotal() { return maxTotal; }
     /** Fraction of training objects carrying each aspect: the original layer's scarcity. */
     final Map<String, Double> prevalence = new HashMap<>();
 
@@ -88,6 +104,12 @@ final class Model {
 
     /** {@code ignoredWords}: name words the item gave no evidence for (see {@link Materials}); they count as no word at all. */
     Prediction predict(String id, List<Source> extra, double fallbackTotal, Double forcedTotal, Set<String> ignoredWords) {
+        return predict(id, extra, fallbackTotal, forcedTotal, ignoredWords, null);
+    }
+
+    /** {@code kind}: the object's own kind ({@link ItemFeatures#kind}), or null if unknown. */
+    Prediction predict(String id, List<Source> extra, double fallbackTotal, Double forcedTotal, Set<String> ignoredWords, String kind) {
+        String ck = coarseKind(kind);
         List<String> tokens = Tokens.of(id);
         if (!ignoredWords.isEmpty()) tokens.removeIf(ignoredWords::contains);
         Set<String> T = new LinkedHashSet<>(tokens);
@@ -113,12 +135,15 @@ final class Model {
             double u = 0;
             for (String t : uni) u += idf.getOrDefault(t, 3.0) * info(t);
             double sim = pre.get(i).getValue() / u + (Tokens.namespace(r).equals(ns) ? 0.05 : 0);
+            String rk = coarseKind(kinds.get(r));
+            if (ck != null && rk != null && !ck.equals(rk)) sim *= KIND_MISMATCH;
             sims.add(new double[]{sim, ids.size()});
             ids.add(r);
         }
         sims.sort((a, b) -> Double.compare(b[0], a[0]));
         Map<String, Double> knn = new HashMap<>();
-        double kt = 0, ks = 0, best = 0, kc = 0;
+        List<double[]> kTotals = new ArrayList<>(); // {total, similarity}
+        double ks = 0, best = 0, kc = 0;
         for (int i = 0; i < Math.min(K, sims.size()); i++) {
             double sim = sims.get(i)[0];
             if (sim < SIM_MIN) break;
@@ -127,7 +152,7 @@ final class Model {
             double tot = total(v);
             double fs = sim;
             v.forEach((a, x) -> knn.merge(a, fs * x / tot, Double::sum));
-            kt += sim * tot;
+            kTotals.add(new double[]{tot, sim});
             kc += sim * v.size();
             ks += sim;
         }
@@ -177,8 +202,10 @@ final class Model {
             for (double x : dist.values()) z0 += x;
             if (z0 > 0) { final double zz = z0; dist.replaceAll((a, x) -> x / zz); }
         }
+        // a weighted median, so one outlying neighbour cannot set the size; name-based totals never exceed
+        // what the pack's own authors wrote by hand
         double totalAmount = forcedTotal != null ? forcedTotal
-                : ks > 0 ? kt / ks : tsum > 0 ? tt / tsum : fallbackTotal;
+                : Math.min(maxTotal, ks > 0 ? weightedMedian(kTotals) : tsum > 0 ? tt / tsum : fallbackTotal);
 
         List<Map.Entry<String, Double>> ranked = new ArrayList<>(dist.entrySet());
         ranked.sort((a, b) -> Double.compare(b.getValue(), a.getValue()));
@@ -197,6 +224,17 @@ final class Model {
         LinkedHashMap<String, Integer> out = new LinkedHashMap<>();
         for (Map.Entry<String, Double> e : kept) out.put(e.getKey(), (int) Math.max(1, Math.round(totalAmount * e.getValue() / z)));
         return new Prediction(out, Math.min(1, W / 2), basis);
+    }
+
+    /** Median of {value, weight} pairs: the smallest value at which half the weight is reached. */
+    static double weightedMedian(List<double[]> pairs) {
+        List<double[]> s = new ArrayList<>(pairs);
+        s.sort(Comparator.comparingDouble(p -> p[0]));
+        double w = 0, half = 0;
+        for (double[] p : s) half += p[1];
+        half /= 2;
+        for (double[] p : s) { w += p[1]; if (w >= half) return p[0]; }
+        return s.isEmpty() ? 0 : s.get(s.size() - 1)[0];
     }
 
     static double total(Map<String, Double> v) {

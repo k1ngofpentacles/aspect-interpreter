@@ -10,6 +10,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.tags.TagKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
@@ -140,6 +141,14 @@ final class DimensionContext {
 
     // ---------------------------------------------------------------- computation
 
+    private static final TagKey<Biome> IS_OVERWORLD = TagKey.create(Registries.BIOME, ResourceLocation.withDefaultNamespace("is_overworld"));
+    private static final TagKey<Biome> C_IS_OVERWORLD = TagKey.create(Registries.BIOME, ResourceLocation.fromNamespaceAndPath("c", "is_overworld"));
+
+    /** A baseline biome: one the baseline dimension generates, or one tagged as an overworld biome. */
+    private static boolean isBaselineBiome(Holder<Biome> b, Set<Holder<Biome>> baselineBiomes) {
+        return baselineBiomes.contains(b) || b.is(IS_OVERWORLD) || b.is(C_IS_OVERWORLD);
+    }
+
     /** Runs once per server start / datapack reload, before the index build. Typically well under a second. */
     static synchronized void compute(MinecraftServer server) {
         Config cfg = Config.get();
@@ -157,13 +166,29 @@ final class DimensionContext {
         Set<String> biomeSpawners = new HashSet<>(), structureSpawners = new HashSet<>();
         Map<Holder<Biome>, Set<String>> biomeDims = new HashMap<>();
 
+        // A biome borrowed from the baseline belongs to the baseline wherever it appears. Thaumaturge Tinker's
+        // Bedrock dimension is one flat minecraft:beach, and that must not make every beach mob an alien native.
+        Set<Holder<Biome>> baselineBiomes = new HashSet<>();
+        String baseline = cfg.baselineDimensions.isEmpty() ? "minecraft:overworld" : cfg.baselineDimensions.get(0);
         for (ServerLevel level : server.getAllLevels()) {
             String dim = level.dimension().location().toString();
+            if (cfg.baselineDimensions.contains(dim)) {
+                baselineBiomes.addAll(level.getChunkSource().getGenerator().getBiomeSource().possibleBiomes());
+                baseline = dim;
+            }
+        }
+        int borrowed = 0;
+
+        for (ServerLevel level : server.getAllLevels()) {
+            String levelDim = level.dimension().location().toString();
             ChunkGenerator gen = level.getChunkSource().getGenerator();
             Set<Holder<Biome>> biomes = gen.getBiomeSource().possibleBiomes();
             Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
             Set<String> blocks = new HashSet<>();
             for (Holder<Biome> b : biomes) {
+                boolean lent = !cfg.baselineDimensions.contains(levelDim) && isBaselineBiome(b, baselineBiomes);
+                if (lent) borrowed++;
+                String dim = lent ? baseline : levelDim;
                 biomeDims.computeIfAbsent(b, k -> new HashSet<>()).add(dim);
                 MobSpawnSettings mobs = b.value().getMobSettings();
                 for (MobCategory c : MobCategory.values())
@@ -173,6 +198,7 @@ final class DimensionContext {
                         habs.computeIfAbsent(eid, k -> new HashMap<>()).merge(b, (double) Math.max(1, sd.getWeight().asInt()), Math::max);
                         biomeSpawners.add(eid);
                     }
+                if (lent) continue; // its features are the baseline's, not this dimension's
                 for (HolderSet<PlacedFeature> step : b.value().getGenerationSettings().features())
                     for (Holder<PlacedFeature> pf : step)
                         collectBlocks(pf.value(), ops, configured, placed, seen, blocks);
@@ -185,7 +211,7 @@ final class DimensionContext {
             }
             for (String block : blocks) {
                 Item it = BuiltInRegistries.BLOCK.get(ResourceLocation.parse(block)).asItem();
-                if (it != Items.AIR) bump(blockItems, BuiltInRegistries.ITEM.getKey(it).toString(), dim, 1);
+                if (it != Items.AIR) bump(blockItems, BuiltInRegistries.ITEM.getKey(it).toString(), levelDim, 1);
             }
         }
 
@@ -251,8 +277,8 @@ final class DimensionContext {
         StringJoiner sj = new StringJoiner("; ");
         signatures.forEach((d, s) -> sj.add(d + " -> " + String.join("/", s.keySet().stream().map(a -> a.replace("thaumaturge:", "")).toList())
                 + " (guaranteed: " + leads.getOrDefault(d, "-").replace("thaumaturge:", "") + ")"));
-        AspectInterpreter.LOG.info("Aspect Interpreter dimension context: {} mob-derived items and {} entities placed in {} ms. Signatures: {}",
-                itemDims.size(), entityDims.size(), (System.nanoTime() - t0) / 1_000_000, sj.length() == 0 ? "none" : sj);
+        AspectInterpreter.LOG.info("Aspect Interpreter dimension context: {} mob-derived items and {} entities placed ({} borrowed baseline biomes credited to the baseline) in {} ms. Signatures: {}",
+                itemDims.size(), entityDims.size(), borrowed, (System.nanoTime() - t0) / 1_000_000, sj.length() == 0 ? "none" : sj);
     }
 
     /**
