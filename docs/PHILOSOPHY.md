@@ -200,7 +200,7 @@ Thaumaturge's recipe rule carries an ingredient's aspects into everything made f
 
 Three rules follow:
 
-- **Train only on authored data, or data derived only from it.** Everything downstream of a guess or an addition, through any recipe, is excluded from learning.
+- **Train only on authored data, or data derived only from it.** 1.9.0 excluded everything downstream of a guess by tracing ingredients, which missed any recipe type whose ingredients it could not see (Thaumaturge 1.1.1's smithing). 1.10.0 does not trace anything: it asks Thaumaturge to derive its values again with this mod switched off (the clean pass) and trains on that, in the same launch. Every recipe type Thaumaturge reads is covered, now and in future, and there is no reset or second launch.
 - **No guess outweighs the authors.** A name-based guess is capped at the largest hand-written total in the running pack. It takes the weighted median of its neighbours' totals, so a single outlier can't set the size.
 - **Similar names are not similar things across kinds.** "raw" means ore on an item and meat on food. Neighbours of another kind (food, gear, other) count half.
 

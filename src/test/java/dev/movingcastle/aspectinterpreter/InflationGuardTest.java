@@ -72,14 +72,18 @@ class InflationGuardTest {
     }
 
     @Test
-    void derivedItemsAreExcludedTransitively() {
-        Map<String, Set<String>> products = Map.of(
-                "modx:sulfur_spike", Set.of("minecraft:sulfur"),
-                "minecraft:sulfur", Set.of("minecraft:sulfur_bricks", "minecraft:sulfur_block"),
-                "minecraft:sulfur_bricks", Set.of("minecraft:sulfur_brick_stairs", "modx:sulfur_spike"), // a cycle
-                "minecraft:stone", Set.of("minecraft:stone_bricks"));
-        Set<String> out = InterpretedIds.downstream(Set.of("modx:sulfur_spike"), products);
-        assertEquals(Set.of("modx:sulfur_spike", "minecraft:sulfur", "minecraft:sulfur_bricks",
-                "minecraft:sulfur_block", "minecraft:sulfur_brick_stairs"), out);
+    void cleanTrainingIsReusedOnlyWhileTheCacheFingerprintMatches() {
+        Map<String, Map<String, Double>> clean = Map.of("minecraft:netherite_chestplate", a("metallum", 40, "praecantatio", 12));
+        String json = CleanPass.toJson("abc123", clean);
+        assertEquals(clean, CleanPass.fromJson(json, "abc123"));
+        assertNull(CleanPass.fromJson(json, "other"), "a different index must not reuse the saved values");
+        String cache = "{\"fingerprint\":\"abc123\",\"item_count\":3,\"aspects\":{}}";
+        assertEquals("abc123", CleanPass.headerFingerprint(cache));
+        assertEquals("", CleanPass.headerFingerprint("{\"aspects\":{}}"));
+        assertFalse(CleanPass.needsRebuild("", "", ""), "no cache: a build is coming anyway");
+        assertFalse(CleanPass.needsRebuild("abc", "abc", ""), "in-memory values match");
+        assertFalse(CleanPass.needsRebuild("abc", "", "abc"), "saved values match");
+        assertTrue(CleanPass.needsRebuild("abc", "old", ""), "valid cache, no matching clean values: rebuild");
+        assertTrue(CleanPass.needsRebuild("abc", "", "old"));
     }
 }

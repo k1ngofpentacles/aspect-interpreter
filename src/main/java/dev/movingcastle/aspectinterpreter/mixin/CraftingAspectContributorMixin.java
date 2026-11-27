@@ -4,6 +4,7 @@ import com.leclowndu93150.thaumaturge.api.aspect.AspectList;
 import com.leclowndu93150.thaumaturge.api.aspect.IAspectIndex;
 import com.leclowndu93150.thaumaturge.content.aspect.CraftingAspectContributor;
 import dev.movingcastle.aspectinterpreter.Additions;
+import dev.movingcastle.aspectinterpreter.CleanPass;
 import dev.movingcastle.aspectinterpreter.CraftComplexity;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.world.item.Item;
@@ -26,6 +27,7 @@ public abstract class CraftingAspectContributorMixin {
             at = @At("RETURN"), cancellable = true, require = 0) // optional: if Thaumaturge changes, only this layer turns off
     private void aspectInterpreter$craftsmanship(Item item, RecipeManager recipes, HolderLookup.Provider registries, IAspectIndex index,
                                                   CallbackInfoReturnable<Optional<AspectList>> cir) {
+        if (CleanPass.active()) return; // the clean pass must see Thaumaturge's own result
         Optional<AspectList> result = cir.getReturnValue();
         if (result == null || result.isEmpty()) return;
         try {

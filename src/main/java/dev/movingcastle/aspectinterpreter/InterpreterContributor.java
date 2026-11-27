@@ -39,16 +39,17 @@ final class InterpreterContributor implements IAspectRecipeContributor {
     private static volatile boolean building;
     private static long buildNanos;
     private static int asked, filled;
-    /** Ingredient id -> ids of items made from it, for the items derived from our guesses. */
-    private static volatile Map<String, Set<String>> products = Map.of();
 
     @Override
     public void beginBuild(RecipeManager recipes, HolderLookup.Provider registries) {
+        if (CleanPass.active()) return; // the clean pass re-enters Thaumaturge's build with this mod off
+        var server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
+        // Train on Thaumaturge's own derivation with this mod off, in this same launch
+        if (Config.get().learnFromThaumaturgeCache) Knowledge.rebuild(CleanPass.run(recipes, registries, server));
+        else Knowledge.rebuildIfStale();
         long t0 = System.nanoTime();
-        Knowledge.rebuildIfStale();
         CraftComplexity.prepare(recipes, registries);
         FamilyLayer.prepare();
-        var server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
         if (!Canon.computed()) Canon.compute(server);
         if (!DimensionContext.computed()) DimensionContext.compute(server);
         AssignmentLog.clearItems();
@@ -60,7 +61,6 @@ final class InterpreterContributor implements IAspectRecipeContributor {
         buildNanos = 0;
         building = true;
         if (!Config.get().items) return;
-        Map<String, Set<String>> made = new HashMap<>();
         for (RecipeHolder<?> holder : recipes.getRecipes()) {
             try {
                 Recipe<?> r = holder.value();
@@ -68,20 +68,10 @@ final class InterpreterContributor implements IAspectRecipeContributor {
                 if (out == null || out.isEmpty()) continue;
                 List<Recipe<?>> l = byOutput.computeIfAbsent(out.getItem(), k -> new ArrayList<>(2));
                 if (l.size() < MAX_RECIPES_PER_ITEM) l.add(r);
-                // ingredient -> product, through the options Thaumaturge (first) and this contributor (first two) read
-                String outId = BuiltInRegistries.ITEM.getKey(out.getItem()).toString();
-                for (Ingredient ing : r.getIngredients()) {
-                    ItemStack[] opts = ing.getItems();
-                    for (int i = 0; i < Math.min(MAX_OPTIONS_PER_INGREDIENT, opts.length); i++) {
-                        String in = BuiltInRegistries.ITEM.getKey(opts[i].getItem()).toString();
-                        if (!in.equals(outId)) made.computeIfAbsent(in, k -> new HashSet<>(2)).add(outId);
-                    }
-                }
             } catch (Throwable ignored) {
                 // some recipe types need a level for getResultItem; skip them
             }
         }
-        products = made;
         buildNanos += System.nanoTime() - t0;
     }
 
@@ -89,23 +79,19 @@ final class InterpreterContributor implements IAspectRecipeContributor {
     static void finishBuildIfDone() {
         if (!building) return;
         building = false;
-        // never learn from our own work: exclude guessed items, items we added to, and everything Thaumaturge
-        // derived from them, from future cache learning
-        Set<String> roots = new HashSet<>(FILLED);
-        roots.addAll(Additions.itemIds());
-        Set<String> ours = InterpretedIds.downstream(roots, products);
-        ours.removeAll(Knowledge.authored.keySet()); // hand-written values are learned from the data maps anyway
-        int derived = Math.max(0, ours.size() - roots.size());
-        AspectInterpreter.LOG.info("Aspect Interpreter: filled {} of {} unresolved items; additions: {}; {} items derived from those are kept out of learning; {} ms of our own work inside Thaumaturge's index build",
-                filled, asked, Additions.summary(), derived, buildNanos / 1_000_000);
-        InterpretedIds.save(ours, derived);
-        products = Map.of();
-        AspectInterpreter.recordBuild(Knowledge.learnedFromCache > 0);
+        AspectInterpreter.LOG.info("Aspect Interpreter: filled {} of {} unresolved items; additions: {}; {} ms of our own work inside Thaumaturge's index build",
+                filled, asked, Additions.summary(), buildNanos / 1_000_000);
+        AspectInterpreter.recordBuild();
+        // the startup tables were made before this build's clean model existed: redo them so this launch is already clean
+        long t1 = System.nanoTime();
+        AspectInterpreter.refreshAfterBuild(net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer());
+        AspectInterpreter.LOG.info("Aspect Interpreter: entity, dimension and mob tables redone from the clean model in {} ms", (System.nanoTime() - t1) / 1_000_000);
         AssignmentLog.write();
     }
 
     @Override
     public Optional<AspectList> derive(Item item, RecipeManager recipes, HolderLookup.Provider registries, IAspectIndex index) {
+        if (CleanPass.active()) return Optional.empty();
         Config cfg = Config.get();
         if (!cfg.items) return Optional.empty();
         long t0 = System.nanoTime();

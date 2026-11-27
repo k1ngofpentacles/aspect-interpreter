@@ -19,9 +19,8 @@ Hand-written aspects are canon. Vanilla, Thaumaturge and its add-ons, Create and
 Optional: Thaumic Additions and Madman's Dreams. Their extra aspects are used when installed and skipped when not.
 
 ## What happens when you install it
-1. **First launch:** Thaumaturge's aspect index is rebuilt once with interpreted aspects included. In a ~10,000-item pack this added about 0.3 s to the build. Thaumaturge then caches the result, so later launches load it from disk and cost nothing.
-2. **Second launch (fresh installs only):** one more rebuild, now learning from the full index Thaumaturge wrote on the first launch.
-3. **Each build:** every guess is listed in `config/aspect_interpreter/assignments.txt` with its confidence and its strongest evidence.
+1. **First launch (the only one that matters):** Thaumaturge's aspect index is rebuilt once with interpreted aspects included. The interpreter first runs Thaumaturge's own derivation with itself switched off and learns from that clean result, all inside the same build. In a ~10,000-item pack this added well under a second to the build. Thaumaturge then caches the result, so later launches load it from disk and cost nothing.
+2. **Each build:** every guess is listed in `config/aspect_interpreter/assignments.txt` with its confidence and its strongest evidence.
 
 ## How it decides
 The model reads what your pack already does and applies the same pattern to the gaps. In packs measured during development, assignments follow material first and theme second: a crimson table is a plant, not a demon. Each guess blends four kinds of evidence:
@@ -40,7 +39,7 @@ The config file is `config/aspect_interpreter.json`:
 | Option | Default | Meaning |
 |---|---|---|
 | `items` / `entities` | `true` | Turn either half off |
-| `learnFromThaumaturgeCache` | `true` | Also learn from Thaumaturge's resolved index, excluding this mod's own guesses |
+| `learnFromThaumaturgeCache` | `true` | Also learn from Thaumaturge's own derived values (computed with this mod switched off, so its guesses never feed back) |
 | `mobEnrichment` | `true` | Enrich mobs from habitat, dimension, behaviour and drops |
 | `canonNamespaces` | vanilla, Thaumaturge family, Create family | Mods that are only read, never added to (hand-writing mods are detected automatically) |
 | `familyConsistency` | `true` | Give crafted and interpreted items their family's key aspects (candles → lux) |
@@ -71,3 +70,7 @@ Then run `gradle build`. The jar is written to `build/libs/`.
 This project is MIT licensed (see [`LICENSE`](LICENSE)).
 
 It contains no code, assets or data from Thaumaturge or any other mod. At runtime it reads the player's own installed data. Thaumaturge is the work of Leclowndu93150 and contributors. This project is not affiliated with or endorsed by them.
+
+## In-game testing
+
+The manual checks for this mod are the FTB Quests chapter **QA: Aspect Interpreter** (`qa_aspect_interpreter`, spec `tools/qa-quests/specs/aspect_interpreter.json` in the workspace); nothing is listed here.

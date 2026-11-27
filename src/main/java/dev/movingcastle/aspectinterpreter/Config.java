@@ -16,7 +16,7 @@ import java.util.Map;
 final class Config {
     boolean items = true;
     boolean entities = true;
-    /** Also learn from Thaumaturge's own resolved index cache (config/thaumaturge/aspect_index.json), excluding this mod's guesses. */
+    /** Also learn from Thaumaturge's own derived values (recipes, smithing, cooking...), computed once per index build with this mod switched off so its guesses never feed back. */
     boolean learnFromThaumaturgeCache = true;
     /** 0..1. Guesses below this are left unassigned. Lexicon-only guesses usually score 0.1-0.3. */
     double minConfidence = 0.15;

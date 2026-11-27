@@ -55,6 +55,16 @@ public final class AspectInterpreter {
         NeoForge.EVENT_BUS.addListener(ServerTickEvent.Post.class, e -> InterpreterContributor.finishBuildIfDone());
     }
 
+    /** After an index build: redo the tables that were made at startup, and send the new entity table to connected players. */
+    static void refreshAfterBuild(MinecraftServer server) {
+        if (server == null) return;
+        EntityInterpreter.invalidate();
+        DimensionContext.compute(server);
+        refresh(server);
+        if (!server.getPlayerList().getPlayers().isEmpty())
+            PacketDistributor.sendToAllPlayers(new EntityTablePayload(EntityInterpreter.table()));
+    }
+
     private static void refresh(MinecraftServer server) {
         try {
             Knowledge.rebuildIfStale();
@@ -70,13 +80,9 @@ public final class AspectInterpreter {
     /**
      * Thaumaturge caches its finished index in config/thaumaturge/aspect_index.json and only rebuilds when items,
      * base aspects or recipes change. That fingerprint does not include this mod, so the cache is moved aside
-     * (once) whenever:
-     * <ul>
-     *   <li>this mod's version or config changed since the last build, or</li>
-     *   <li>the last build had to learn without an index cache (fresh install). Thaumaturge has since written one,
-     *       so one more rebuild lets the interpreter learn from it. This happens at most once per signature.</li>
-     * </ul>
-     * Stamp format: {@code <signature>;<mode>} where mode is {@code pending}, {@code base} or {@code index}.
+     * (once) whenever this mod's version or config changed since the last build. One launch is enough: the build learns
+     * from Thaumaturge's own values in the same launch (see {@link CleanPass}). Stamp format: {@code <signature>;<mode>}
+     * (the mode is kept for old stamps and no longer read).
      */
     private static void invalidateStaleThaumaturgeCache() {
         try {
@@ -86,28 +92,26 @@ public final class AspectInterpreter {
             String[] previous = readStamp(cfgDir);
             Path cache = cfgDir.resolve("thaumaturge").resolve("aspect_index.json");
             boolean changed = !signature.equals(previous[0]);
-            boolean secondPass = !changed && "base".equals(previous[1]);
-            if (!changed && !secondPass) return;
+            // a valid cache without matching clean training values would leave a launch with no clean learning: rebuild instead
+            boolean lacksClean = !changed && Files.exists(cache) && CleanPass.cacheLacksCleanValues();
+            if (!changed && !lacksClean) return;
             if (Files.exists(cache)) {
                 Files.move(cache, cache.resolveSibling("aspect_index.before_interpreter.json"), StandardCopyOption.REPLACE_EXISTING);
                 LOG.info(changed
                         ? "Aspect Interpreter: moved Thaumaturge's aspect index cache aside so it rebuilds once with interpreted aspects"
-                        : "Aspect Interpreter: rebuilding once more now that Thaumaturge's index cache exists to learn from");
+                        : "Aspect Interpreter: no clean training values match Thaumaturge's index cache; moved it aside so it rebuilds once");
             }
-            // a second pass never schedules a third: it is recorded as index-trained whatever happens
-            writeStamp(cfgDir, signature, secondPass ? "index" : "pending");
+            if (changed) writeStamp(cfgDir, signature, "pending");
         } catch (Exception e) {
             LOG.warn("Aspect Interpreter could not check Thaumaturge's index cache", e);
         }
     }
 
     /** Called after each index build this mod took part in. */
-    static void recordBuild(boolean learnedFromIndex) {
+    static void recordBuild() {
         try {
             Path cfgDir = FMLPaths.CONFIGDIR.get();
-            String[] previous = readStamp(cfgDir);
-            String mode = learnedFromIndex || "index".equals(previous[1]) ? "index" : "base";
-            writeStamp(cfgDir, signature(cfgDir), mode);
+            writeStamp(cfgDir, signature(cfgDir), "index");
         } catch (Exception e) {
             LOG.warn("Aspect Interpreter could not record its build", e);
         }

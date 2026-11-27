@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.10.0
+- **One launch is enough.** The interpreter now learns from a clean copy of Thaumaturge's own aspect values, worked out inside the same index build with the interpreter switched off. A fresh install or an update no longer needs a second launch, and there is no one-time reset.
+- **No stale learning, for every recipe type.** 1.9.0 kept guesses out of learning by following recipe ingredients, which missed anything made another way (Thaumaturge 1.1.1's smithing recipes, such as netherite gear). The clean copy covers whatever Thaumaturge itself reads, including recipe types added later.
+- **Mob and dimension tables are redone** after the build from the clean model, so the first launch is already fully clean. If Thaumaturge's cache is valid but the saved clean values are missing or from another index, the cache is moved aside and rebuilt once.
+- **Cost:** about 0.3 seconds more on the one index build (Thaumaturge's own calculation run once more, plus redoing the mob tables); later launches are unchanged.
+- `learnFromThaumaturgeCache` keeps its name and now means "learn from Thaumaturge's derived values". When Thaumaturge's cache is valid and no build runs, the clean values are reloaded from `config/aspect_interpreter/clean_training.json`. `interpreted_items.txt` is no longer written and can be deleted.
+
 ## 1.9.0
 - **Fixed runaway aspect amounts.** The interpreter learned from Thaumaturge's index cache, excluding the items it guessed itself but not the items Thaumaturge then crafted from those guesses. Each launch it learned its own guesses second-hand and guessed a little richer, so minor items crept up to hundreds of each aspect (in the author's pack, items totalling 1,000+ went from 19 to 262 between two launches, and 232 sat at Thaumaturge's 500 cap). Every item derived through recipes from a guess or an addition is now kept out of learning too.
 - **One-time reset.** A cache from an older version may hold second-hand guesses, so the first launch of 1.9.0 learns from data maps only. The next launch rebuilds once more from the clean index, as on a fresh install.

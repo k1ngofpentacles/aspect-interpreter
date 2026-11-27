@@ -1,9 +1,5 @@
 package dev.movingcastle.aspectinterpreter;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import com.leclowndu93150.thaumaturge.api.aspect.AspectDataMaps;
 import com.leclowndu93150.thaumaturge.api.aspect.AspectInstance;
 import com.leclowndu93150.thaumaturge.api.aspect.AspectList;
@@ -12,11 +8,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Item;
-import net.neoforged.fml.loading.FMLPaths;
 
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.*;
 
 /**
@@ -24,12 +16,10 @@ import java.util.*;
  * player's own installation.
  * <ul>
  *   <li>Live {@code base_aspects} / {@code entity_aspects} data maps (always).</li>
- *   <li>Thaumaturge's own resolved index cache on disk, if one exists, minus every item this mod
- *       interpreted or added to, and every item crafted from those (so the model never learns from its own
- *       guesses, even second-hand).</li>
+ *   <li>Thaumaturge's own derived values, from the clean pass ({@link CleanPass}): its derivation run with this mod
+ *       switched off, so the model never learns from its own guesses, even second-hand. Never read from
+ *       Thaumaturge's cache file.</li>
  * </ul>
- * A fresh install has no cache yet; it learns from data maps only, and the next launch rebuilds
- * once more with the richer index (see {@link AspectInterpreter}).
  */
 final class Knowledge {
     static final Lexicon LEXICON = Lexicon.load();
@@ -37,7 +27,7 @@ final class Knowledge {
     private static volatile boolean stale = true;
     private static volatile Model itemModel;
     private static volatile Model entityModel;
-    /** How many items were learned from Thaumaturge's cache in the last rebuild. */
+    /** How many items were learned from Thaumaturge's clean derived values in the last rebuild. */
     static volatile int learnedFromCache;
     /** Median share each aspect takes of an item's total when it is not the leading aspect (the original layer's scale for additions). */
     private static volatile Map<String, Double> minorShares = Map.of();
@@ -64,21 +54,14 @@ final class Knowledge {
     }
 
     private static synchronized void rebuild() {
+        rebuild(Config.get().learnFromThaumaturgeCache ? CleanPass.training() : Map.of());
+    }
+
+    /** Rebuilds the model from the data maps plus {@code clean}, Thaumaturge's own values derived without this mod. */
+    static synchronized void rebuild(Map<String, Map<String, Double>> clean) {
         long t0 = System.nanoTime();
-        Config cfg = Config.get();
-        Map<String, Map<String, Double>> items = new HashMap<>();
-        learnedFromCache = 0;
-        Set<String> ours = cfg.learnFromThaumaturgeCache ? InterpretedIds.load() : null;
-        if (cfg.learnFromThaumaturgeCache && ours == null)
-            AspectInterpreter.LOG.info("Aspect Interpreter: the last index build did not record which items were derived from its guesses; "
-                    + "learning from data maps only this launch, and from the clean index on the next");
-        if (ours != null) {
-            for (Map.Entry<String, Map<String, Double>> e : readThaumaturgeCache().entrySet()) {
-                if (ours.contains(e.getKey())) continue;
-                items.put(e.getKey(), e.getValue());
-                learnedFromCache++;
-            }
-        }
+        Map<String, Map<String, Double>> items = new HashMap<>(clean);
+        learnedFromCache = clean.size();
         Map<String, Map<String, Double>> hand = new HashMap<>();
         for (Item item : BuiltInRegistries.ITEM) {
             Holder.Reference<Item> h = item.builtInRegistryHolder();
@@ -118,40 +101,8 @@ final class Knowledge {
         itemModel = new Model(items, LEXICON).withKinds(kinds).withMaxTotal(maxHand);
         entityModel = new Model(entities, LEXICON);
         stale = false;
-        AspectInterpreter.LOG.info("Aspect Interpreter learned from {} items ({} from Thaumaturge's index cache; name-based totals capped at {}) and {} entities in {} ms",
+        AspectInterpreter.LOG.info("Aspect Interpreter learned from {} items ({} from Thaumaturge's own derived values; name-based totals capped at {}) and {} entities in {} ms",
                 items.size(), learnedFromCache, (int) maxHand, entities.size(), (System.nanoTime() - t0) / 1_000_000);
-    }
-
-    /** Reads Thaumaturge's index cache (or the copy this mod set aside). Returns item id -> aspect -> amount. */
-    private static Map<String, Map<String, Double>> readThaumaturgeCache() {
-        Path dir = FMLPaths.CONFIGDIR.get().resolve("thaumaturge");
-        for (String name : List.of("aspect_index.json", "aspect_index.before_interpreter.json")) {
-            Path p = dir.resolve(name);
-            if (!Files.exists(p)) continue;
-            try {
-                JsonObject root = JsonParser.parseString(Files.readString(p, StandardCharsets.UTF_8)).getAsJsonObject();
-                JsonObject aspects = root.getAsJsonObject("aspects");
-                if (aspects == null) continue;
-                Map<String, Map<String, Double>> out = new HashMap<>();
-                for (Map.Entry<String, JsonElement> e : aspects.entrySet()) {
-                    JsonElement v = e.getValue();
-                    JsonArray arr = v.isJsonArray() ? v.getAsJsonArray()
-                            : v.isJsonObject() && v.getAsJsonObject().has("base") ? v.getAsJsonObject().getAsJsonArray("base") : null;
-                    if (arr == null) continue;
-                    Map<String, Double> m = new HashMap<>();
-                    for (JsonElement el : arr) {
-                        JsonObject o = el.getAsJsonObject();
-                        if (!o.has("aspect")) continue;
-                        m.merge(o.get("aspect").getAsString(), o.has("amount") ? o.get("amount").getAsDouble() : 1.0, Double::sum);
-                    }
-                    if (!m.isEmpty()) out.put(e.getKey(), m);
-                }
-                if (!out.isEmpty()) return out;
-            } catch (Exception ex) {
-                AspectInterpreter.LOG.warn("Aspect Interpreter could not read {}", p, ex);
-            }
-        }
-        return Map.of();
     }
 
     static Model items() {

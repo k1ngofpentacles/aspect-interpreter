@@ -12,7 +12,7 @@
 
 ## File upload
 
-* **File:** `aspect_interpreter-1.9.0-neoforge-1.21.1-1.9.0.jar` (from `build/libs/`)
+* **File:** `aspect_interpreter-1.10.0-neoforge-1.21.1-1.10.0.jar` (from `build/libs/`)
 * **Release type:** Beta. It has run in one large pack; Beta sets expectations while others test it.
 * **Game version:** 1.21.1
 * **Mod loader:** NeoForge
@@ -23,7 +23,7 @@
   * Thaumaturge: *Required Dependency*
   * Thaumic Additions Community Edition: *Optional Dependency*
   * Madman's Dreams: *Optional Dependency*
-* **Changelog:** paste the 1.9.0 section of `CHANGELOG.md`.
+* **Changelog:** paste the 1.10.0 section of `CHANGELOG.md`.
 
 ## Description 
 
