@@ -20,13 +20,13 @@ import net.minecraft.world.item.crafting.RecipeManager;
 import java.util.*;
 
 /**
- * Registered after Thaumaturge's own crucible/infusion/crafting/cooking contributors, so it is
- * only asked about items those could not resolve. Every leaf it fills in lets Thaumaturge's own
- * recipe logic finish the items crafted from it.
+ * Registered after Thaumaturge's own crucible/infusion/crafting/cooking contributors, so it is only asked about items
+ * those could not resolve. It acts only while {@link OverlayBuilder} runs Thaumaturge's derivation a second time with this
+ * mod switched on; Thaumaturge's own index build never sees it. Every leaf it fills in lets Thaumaturge's own recipe logic
+ * finish the items crafted from it, and those products end up in the overlay too.
  *
- * Cost model: everything here runs once, inside Thaumaturge's index build, which Thaumaturge then
- * caches to disk. Name-model predictions are memoised per build because Thaumaturge resolves the
- * whole registry twice (before and after split-conservation).
+ * Cost model: everything here runs once per launch, inside the overlay build. Name-model predictions are memoised per
+ * build because Thaumaturge resolves the whole registry twice (before and after split-conservation).
  */
 final class InterpreterContributor implements IAspectRecipeContributor {
     private static final int MAX_RECIPES_PER_ITEM = 4;
@@ -36,30 +36,20 @@ final class InterpreterContributor implements IAspectRecipeContributor {
     private final Map<Item, Model.Prediction> memo = new HashMap<>();
 
     private static final Set<String> FILLED = Collections.synchronizedSet(new HashSet<>());
-    private static volatile boolean building;
     private static long buildNanos;
     private static int asked, filled;
 
     @Override
     public void beginBuild(RecipeManager recipes, HolderLookup.Provider registries) {
-        if (CleanPass.active()) return; // the clean pass re-enters Thaumaturge's build with this mod off
-        var server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
-        // Train on Thaumaturge's own derivation with this mod off, in this same launch
-        if (Config.get().learnFromThaumaturgeCache) Knowledge.rebuild(CleanPass.run(recipes, registries, server));
-        else Knowledge.rebuildIfStale();
+        // Thaumaturge's own index build runs with this mod off, so its index and cache file hold only its values; this
+        // contributor acts only inside the overlay build (OverlayBuilder), after the model, canon and tables are ready.
+        if (!Overlay.building()) return;
         long t0 = System.nanoTime();
-        CraftComplexity.prepare(recipes, registries);
-        FamilyLayer.prepare();
-        if (!Canon.computed()) Canon.compute(server);
-        if (!DimensionContext.computed()) DimensionContext.compute(server);
-        AssignmentLog.clearItems();
-        Additions.clear();
         byOutput.clear();
         memo.clear();
         asked = filled = 0;
         FILLED.clear();
         buildNanos = 0;
-        building = true;
         if (!Config.get().items) return;
         for (RecipeHolder<?> holder : recipes.getRecipes()) {
             try {
@@ -75,25 +65,12 @@ final class InterpreterContributor implements IAspectRecipeContributor {
         buildNanos += System.nanoTime() - t0;
     }
 
-    /** Called at the end of every server tick; logs and reports once after an index build. */
-    static void finishBuildIfDone() {
-        if (!building) return;
-        building = false;
-        AspectInterpreter.LOG.info("Aspect Interpreter: filled {} of {} unresolved items; additions: {}; {} ms of our own work inside Thaumaturge's index build",
-                filled, asked, Additions.summary(), buildNanos / 1_000_000);
-        AspectInterpreter.recordBuild();
-        // the startup tables were made before this build's clean model existed: redo them so this launch is already clean
-        long t1 = System.nanoTime();
-        AspectInterpreter.refreshAfterBuild(net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer());
-        AspectInterpreter.LOG.info("Aspect Interpreter: entity, dimension and mob tables redone from the clean model in {} ms", (System.nanoTime() - t1) / 1_000_000);
-        AssignmentLog.write();
-    }
-
     @Override
     public Optional<AspectList> derive(Item item, RecipeManager recipes, HolderLookup.Provider registries, IAspectIndex index) {
-        if (CleanPass.active()) return Optional.empty();
+        if (!Overlay.building()) return Optional.empty();
         Config cfg = Config.get();
         if (!cfg.items) return Optional.empty();
+        if (HandWritten.item(item)) return Optional.empty(); // hand-written items get nothing from us (Thaumaturge never asks; guarded anyway)
         long t0 = System.nanoTime();
         String id = BuiltInRegistries.ITEM.getKey(item).toString();
         try {

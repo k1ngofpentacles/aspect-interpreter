@@ -16,9 +16,9 @@ import java.util.*;
  * player's own installation.
  * <ul>
  *   <li>Live {@code base_aspects} / {@code entity_aspects} data maps (always).</li>
- *   <li>Thaumaturge's own derived values, from the clean pass ({@link CleanPass}): its derivation run with this mod
- *       switched off, so the model never learns from its own guesses, even second-hand. Never read from
- *       Thaumaturge's cache file.</li>
+ *   <li>Thaumaturge's own index of this launch ({@link #cleanFrom}), read without our overlay. Thaumaturge builds it with
+ *       this mod switched off, so the model never learns from its own guesses, even second-hand. Rebuilt from scratch
+ *       at every launch and reload; nothing of it is saved.</li>
  * </ul>
  */
 final class Knowledge {
@@ -39,7 +39,7 @@ final class Knowledge {
     }
 
     static Map<String, Double> toMap(AspectList list) {
-        Map<String, Double> v = new HashMap<>();
+        Map<String, Double> v = new TreeMap<>();
         if (list == null) return v;
         for (AspectInstance i : list.entries()) {
             i.aspect().unwrapKey().ifPresent(k -> v.merge(k.location().toString(), (double) i.amount(), Double::sum));
@@ -53,16 +53,42 @@ final class Knowledge {
         if (stale || itemModel == null || entityModel == null) rebuild();
     }
 
-    private static synchronized void rebuild() {
-        rebuild(Config.get().learnFromThaumaturgeCache ? CleanPass.training() : Map.of());
+    /** Thaumaturge's own values for every item, read from its index without our overlay (id -> aspect -> amount), sorted. */
+    static Map<String, Map<String, Double>> cleanFrom(com.leclowndu93150.thaumaturge.content.aspect.AspectIndex index) {
+        Map<String, Map<String, Double>> out = new TreeMap<>();
+        for (Item item : BuiltInRegistries.ITEM) {
+            AspectList list = Overlay.rawOf(index, item);
+            if (list == null || list.isEmpty()) continue;
+            Map<String, Double> m = toMap(list);
+            if (!m.isEmpty()) out.put(BuiltInRegistries.ITEM.getKey(item).toString(), m);
+        }
+        cleanValues = out;
+        return out;
     }
 
-    /** Rebuilds the model from the data maps plus {@code clean}, Thaumaturge's own values derived without this mod. */
+    /** The values the model last trained on besides the data maps; read by the pack test. */
+    public static volatile Map<String, Map<String, Double>> cleanValues = Map.of();
+
+    /**
+     * A model needed before the overlay computation has run (a lookup racing the first tick, or after a reload): the data maps
+     * plus whatever index Thaumaturge holds. Replaced by the computation's own rebuild as soon as that runs.
+     */
+    private static synchronized void rebuild() {
+        var index = com.leclowndu93150.thaumaturge.content.aspect.AspectIndexHolder.getConcrete();
+        boolean have = Config.get().learnFromThaumaturgeCache && index != com.leclowndu93150.thaumaturge.content.aspect.AspectIndex.EMPTY;
+        rebuild(have ? cleanFrom(index) : Map.of());
+    }
+
+    /**
+     * Rebuilds the model from the data maps plus {@code clean}, Thaumaturge's own values derived without this mod.
+     * Every map is sorted by id and aspect, so sums and tie-breaks never depend on hash or insertion order.
+     */
     static synchronized void rebuild(Map<String, Map<String, Double>> clean) {
         long t0 = System.nanoTime();
-        Map<String, Map<String, Double>> items = new HashMap<>(clean);
+        Map<String, Map<String, Double>> items = new TreeMap<>(clean);
+        // a hand-written entry always wins over the clean value of the same item (put below)
         learnedFromCache = clean.size();
-        Map<String, Map<String, Double>> hand = new HashMap<>();
+        Map<String, Map<String, Double>> hand = new TreeMap<>();
         for (Item item : BuiltInRegistries.ITEM) {
             Holder.Reference<Item> h = item.builtInRegistryHolder();
             AspectList base = h.getData(AspectDataMaps.BASE_ASPECTS);
@@ -83,7 +109,7 @@ final class Knowledge {
         Map<String, Double> med = new HashMap<>();
         shares.forEach((a, l) -> { Collections.sort(l); med.put(a, l.get(l.size() / 2)); });
         minorShares = med;
-        Map<String, Map<String, Double>> entities = new HashMap<>();
+        Map<String, Map<String, Double>> entities = new TreeMap<>();
         for (EntityType<?> type : BuiltInRegistries.ENTITY_TYPE) {
             AspectList a = type.builtInRegistryHolder().getData(AspectDataMaps.ENTITY_ASPECTS);
             if (a != null && !a.isEmpty()) entities.put(EntityType.getKey(type).toString(), toMap(a));
@@ -98,7 +124,7 @@ final class Knowledge {
             if (rl == null) continue;
             BuiltInRegistries.ITEM.getOptional(rl).ifPresent(it -> kinds.put(id, ItemFeatures.kind(it)));
         }
-        itemModel = new Model(items, LEXICON).withKinds(kinds).withMaxTotal(maxHand);
+        itemModel = new Model(items, LEXICON).withKinds(kinds).withMaxTotal(maxHand).withHandWritten(hand.keySet());
         entityModel = new Model(entities, LEXICON);
         stale = false;
         AspectInterpreter.LOG.info("Aspect Interpreter learned from {} items ({} from Thaumaturge's own derived values; name-based totals capped at {}) and {} entities in {} ms",

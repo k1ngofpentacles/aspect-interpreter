@@ -2,14 +2,14 @@
 
 An add-on for [Thaumaturge](https://www.curseforge.com/projects/1628024) on NeoForge 1.21.1. It gives **aspects to every item and entity that has none**, by interpreting each object's name, material, recipes and mob category against the patterns of the aspects your pack already assigns.
 
-It never replaces or reduces an existing aspect. It does three things:
+It never touches anything with a hand-written aspect, and it never writes into Thaumaturge's own index or cache file: its values are a separate overlay, computed fresh at every launch and served on top of Thaumaturge's. It does four things:
 
 - **Fills gaps:** it answers when Thaumaturge would otherwise have nothing, including what the item is for (a barrel holds things, so it gets vacuos).
-- **Enriches mobs:** mobs are the richest source of aspects and the hardest to process. Each mob gains aspects from where it lives (a stray gets gelum), the dimension it comes from (a ghast gets infernum and spiritus; End mobs get alienis), how it behaves (undead get mortuus) and what it drops. Fantasy creatures gain more than ordinary animals, and bosses and rare mobs carry larger totals.
+- **Enriches the mobs it guesses:** mobs without hand-written aspects gain aspects from where they live (a stray gets gelum), the dimension they come from (End mobs get alienis), how they behave (undead get mortuus) and what they drop. Fantasy creatures gain more than ordinary animals, and bosses and rare mobs carry larger totals. A guessed mob is never richer than the hand-written mobs of its threat tier (passive, weak hostile, strong hostile, mini-boss, boss), in total or per aspect.
 - **Keeps families consistent:** crafted items lose defining aspects when no ingredient carries them (vanilla candles are lux, but crafted candles from other mods weren't). Crafted and interpreted items now share the 1–2 key aspects their hand-written relatives agree on, and bright light sources carry lux.
 - **Credits craftsmanship:** crafted items from other mods, made at the crafting table, gain ordo or fabrico for each step beyond the first.
 
-Hand-written aspects are canon. Vanilla, Thaumaturge and its add-ons, Create and its add-ons, and any mod that ships its own aspect files are learned from but never added to, except that their mobs are enriched. Every addition is sized to match how sparingly the original mods use each aspect.
+Hand-written aspects are canon: an item with a `base_aspects` entry or a mob with an `entity_aspects` entry, from any mod and Thaumaturge itself, is learned from but never added to, guessed, enriched or clamped. Vanilla, Thaumaturge and its add-ons, Create and its add-ons, and any mod that ships its own aspect files are also treated as canon for craftsmanship. Every addition is sized to match how sparingly the original mods use each aspect.
 
 ## Requirements
 - Minecraft 1.21.1
@@ -18,9 +18,11 @@ Hand-written aspects are canon. Vanilla, Thaumaturge and its add-ons, Create and
 
 Optional: Thaumic Additions and Madman's Dreams. Their extra aspects are used when installed and skipped when not.
 
-## What happens when you install it
-1. **First launch (the only one that matters):** Thaumaturge's aspect index is rebuilt once with interpreted aspects included. The interpreter first runs Thaumaturge's own derivation with itself switched off and learns from that clean result, all inside the same build. In a ~10,000-item pack this added well under a second to the build. Thaumaturge then caches the result, so later launches load it from disk and cost nothing.
-2. **Each build:** every guess is listed in `config/aspect_interpreter/assignments.txt` with its confidence and its strongest evidence.
+## Installing and upgrading
+**Upgrading from 1.10.0 or older: delete `config/thaumaturge/aspect_index.json` once** (with the game closed). Older versions wrote their guesses into Thaumaturge's index cache; this version never touches that file, so Thaumaturge rebuilds it without them only if you remove it. A new install needs nothing.
+
+## What happens at each launch
+Thaumaturge builds or loads its own index, untouched by this mod. Then, once per launch and after every data reload, the interpreter learns from that index and your hand-written data, computes its overlay (its guesses, additions, and the items crafted from them) and the guessed mobs from scratch, and serves them on top of Thaumaturge's values wherever Thaumaturge looks an item up (tooltips, scanning, crafting costs, the deconstruction table, JEI), on the server and, through a small packet, on clients. In a ~10,000-item pack this takes about half a second. Nothing is saved for the next launch except the record `config/aspect_interpreter/assignments.json`, which lists every value we serve with its confidence and evidence; it is never read back, and the same pack always gives the same file.
 
 ## How it decides
 The model reads what your pack already does and applies the same pattern to the gaps. In packs measured during development, assignments follow material first and theme second: a crimson table is a plant, not a demon. Each guess blends four kinds of evidence:
@@ -39,8 +41,8 @@ The config file is `config/aspect_interpreter.json`:
 | Option | Default | Meaning |
 |---|---|---|
 | `items` / `entities` | `true` | Turn either half off |
-| `learnFromThaumaturgeCache` | `true` | Also learn from Thaumaturge's own derived values (computed with this mod switched off, so its guesses never feed back) |
-| `mobEnrichment` | `true` | Enrich mobs from habitat, dimension, behaviour and drops |
+| `learnFromThaumaturgeCache` | `true` | Also learn from Thaumaturge's own index (built without this mod, so its guesses never feed back) |
+| `mobEnrichment` | `true` | Enrich guessed mobs from habitat, dimension, behaviour and drops (hand-written mobs are never touched) |
 | `canonNamespaces` | vanilla, Thaumaturge family, Create family | Mods that are only read, never added to (hand-writing mods are detected automatically) |
 | `familyConsistency` | `true` | Give crafted and interpreted items their family's key aspects (candles → lux) |
 | `functionLayer` | `true` | Add a missing function aspect to interpreted items |
@@ -49,7 +51,7 @@ The config file is `config/aspect_interpreter.json`:
 | `baselineDimensions` | `["minecraft:overworld"]` | Dimensions with no special character |
 | `dimensionAspects` | `{}` | Pin a dimension's signature, e.g. `{"minecraft:the_end": {"thaumaturge:alienis": 1.0}}` |
 | `minConfidence` | `0.15` | Guesses below this confidence are left unassigned |
-| `writeReport` | `true` | Write `assignments.txt` |
+| `writeReport` | `true` | Write `assignments.json` |
 | `excludedNamespaces`, `excludedIds`, `excludedWords` | technical IDs | Never interpret these |
 
 To override a guess, give the object a normal `base_aspects` or `entity_aspects` data-map entry in a datapack. Real entries always win.

@@ -12,7 +12,7 @@
 
 ## File upload
 
-* **File:** `aspect_interpreter-1.10.0-neoforge-1.21.1-1.10.0.jar` (from `build/libs/`)
+* **File:** `aspect_interpreter-1.11.0-neoforge-1.21.1-1.11.0.jar` (from `build/libs/`)
 * **Release type:** Beta. It has run in one large pack; Beta sets expectations while others test it.
 * **Game version:** 1.21.1
 * **Mod loader:** NeoForge
@@ -23,9 +23,11 @@
   * Thaumaturge: *Required Dependency*
   * Thaumic Additions Community Edition: *Optional Dependency*
   * Madman's Dreams: *Optional Dependency*
-* **Changelog:** paste the 1.10.0 section of `CHANGELOG.md`.
+* **Changelog:** paste the 1.11.0 section of `CHANGELOG.md` (its first line is the upgrade note below).
 
 ## Description 
+
+**Upgrading from 1.10.0 or older: delete `config/thaumaturge/aspect_index.json` once** (with the game closed). Older versions wrote their guesses into Thaumaturge's index cache; this version never touches that file, so Thaumaturge only rebuilds it without them if you remove it. A new install needs nothing.
 
 **Every item and creature in your pack gets aspects, and they make sense.**
 
@@ -42,12 +44,14 @@ It reads what your pack already does and applies the same pattern to the gaps:
 
 **What it won't do**
 
-* **Override anything real.** Existing data-map entries and recipe-derived aspects always win.
-* **Slow your game down.** It works once, inside Thaumaturge's own index build, which Thaumaturge then caches. In a 10,000-item pack it added about 0.3 seconds to that one build.
+* **Touch anything hand-written.** An item or mob that has a hand-written aspect entry, from any mod, gets nothing from us: no guess, no addition, no enrichment.
+* **Touch Thaumaturge's index.** Thaumaturge builds and caches its own index exactly as without us; our values are a separate overlay computed fresh at every launch and served on top of it.
+* **Make a mob richer than its kind.** A mob we guess is held to the hand-written mobs of its threat tier (passive, weak hostile, strong hostile, mini-boss, boss), in total and per aspect.
+* **Slow your game down.** About half a second once per launch in a 10,000-item pack. Same pack, same result, every launch.
 
 **Tuning**
 
-Every guess is listed in `config/aspect\\\_interpreter/assignments.txt` with its confidence. A config file lets you set a confidence threshold, exclude mods, or turn the item or entity half off. To correct a guess, add a normal `base\\\_aspects` or `entity\\\_aspects` entry in a datapack.
+Every value we serve is listed in `config/aspect\\\_interpreter/assignments.json` with its confidence. A config file lets you set a confidence threshold, exclude mods, or turn the item or entity half off. To correct a guess, add a normal `base\\\_aspects` or `entity\\\_aspects` entry in a datapack.
 
 **Compatibility**
 

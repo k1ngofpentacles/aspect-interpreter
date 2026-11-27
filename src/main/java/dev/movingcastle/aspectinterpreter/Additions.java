@@ -14,11 +14,12 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Where the additive layers may act, and a record of what each added. Nothing is ever removed or reduced.
+ * Where the additive layers may act, and a record of what each added. Nothing hand-written is ever added to, removed or
+ * reduced ({@link HandWritten}); every layer here acts only on crafted and interpreted items and guessed mobs.
  *
  * <ul>
- *   <li><b>Mobs</b> ({@link MobEnrichment}): habitat, dimension, behaviour and drops. The only layer that adds to
- *       hand-written entries.</li>
+ *   <li><b>Mobs</b> ({@link MobEnrichment}): habitat, dimension, behaviour and drops, for guessed mobs only, then
+ *       held to the threat tier's hand-written ceiling ({@link MobTiers}).</li>
  *   <li><b>Family</b> ({@link FamilyLayer}): crafted and interpreted items of any mod take the key aspects their
  *       hand-written relatives share (Forestry's and Thaumaturge's crafted candles take lux from vanilla's).</li>
  *   <li><b>Craftsmanship</b> ({@link CraftComplexity}): items of non-canon mods made at the crafting table, whether
@@ -47,11 +48,9 @@ public final class Additions {
 
     static Set<String> itemIds() { return new HashSet<>(LOG.keySet()); }
 
-    static Map<String, String> log() {
-        Map<String, String> all = new TreeMap<>(LOG);
-        ENTITY_LOG.forEach((k, v) -> all.put(k + " (entity)", v));
-        return all;
-    }
+    static Map<String, String> itemLog() { return new TreeMap<>(LOG); }
+
+    static Map<String, String> entityLog() { return new TreeMap<>(ENTITY_LOG); }
 
     static String summary() {
         return String.format(Locale.ROOT, "family %d, craftsmanship %d, function %d, mob-drop dimension %d",
@@ -59,15 +58,17 @@ public final class Additions {
     }
 
     static String entitySummary() {
-        return String.format(Locale.ROOT, "%d hand-written mobs enriched, %d guessed mobs enriched",
-                ENTITY_COUNTS.getOrDefault("real", 0), ENTITY_COUNTS.getOrDefault("guess", 0));
+        return String.format(Locale.ROOT, "%d guessed mobs enriched, %d clamped to their threat tier (hand-written mobs are never touched)",
+                ENTITY_COUNTS.getOrDefault("guess", 0), ENTITY_COUNTS.getOrDefault("clamped", 0));
     }
 
     /**
      * Recipe-derived items (called from the crafting mixin): family keys for any mod's crafted items, then
-     * craftsmanship for non-canon table crafts. Hand-written items never reach here.
+     * craftsmanship for non-canon table crafts. Hand-written items never reach here (Thaumaturge does not derive
+     * them), and are refused again here in case a host changes that.
      */
     public static AspectList forDerived(Item item, AspectList list, HolderLookup.Provider registries) {
+        if (HandWritten.item(item)) return list;
         String id = BuiltInRegistries.ITEM.getKey(item).toString();
         if (Config.get().excluded(id)) return list;
         Map<String, Integer> current = amounts(list);
@@ -85,6 +86,7 @@ public final class Additions {
 
     /** Interpreted items: mob-drop dimension, function and craftsmanship, merged into the guess. */
     static void forGuess(Item item, String id, LinkedHashMap<String, Integer> aspects) {
+        if (HandWritten.item(item)) return;
         int total = 0;
         for (int x : aspects.values()) total += x;
         Map<String, Integer> plan = new LinkedHashMap<>();
@@ -107,10 +109,16 @@ public final class Additions {
         plan.forEach((a, x) -> aspects.merge(a, x, Integer::sum));
     }
 
-    /** Called by {@link MobEnrichment} for every mob it adds to. */
-    static void entity(String id, boolean real, String note) {
+    /** Called by {@link MobEnrichment} for every guessed mob it adds to. */
+    static void entity(String id, String note) {
         ENTITY_LOG.put(id, note);
-        ENTITY_COUNTS.merge(real ? "real" : "guess", 1, Integer::sum);
+        ENTITY_COUNTS.merge("guess", 1, Integer::sum);
+    }
+
+    /** Called when a guessed mob was held to its threat tier's ceiling. */
+    static void clamped(String id, String note) {
+        ENTITY_LOG.merge(id, note, (o, n) -> o + "; " + n);
+        ENTITY_COUNTS.merge("clamped", 1, Integer::sum);
     }
 
     private static void layer(Map<String, Integer> plan, String name, String id, Map<String, Integer> add) {

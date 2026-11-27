@@ -16,7 +16,7 @@ import java.util.Map;
 final class Config {
     boolean items = true;
     boolean entities = true;
-    /** Also learn from Thaumaturge's own derived values (recipes, smithing, cooking...), computed once per index build with this mod switched off so its guesses never feed back. */
+    /** Also learn from Thaumaturge's own index (recipes, smithing, cooking...), which is built with this mod switched off so its guesses never feed back. */
     boolean learnFromThaumaturgeCache = true;
     /** 0..1. Guesses below this are left unassigned. Lexicon-only guesses usually score 0.1-0.3. */
     double minConfidence = 0.15;
@@ -26,7 +26,7 @@ final class Config {
     boolean functionLayer = true;
     /** Add craftsmanship (ordo/fabrico) for each crafting step beyond the first refinement, on non-canon items made at the crafting table. */
     boolean craftingComplexity = true;
-    /** Enrich mobs from their habitat, dimension, behaviour and drops. The only layer that adds to hand-written entries. */
+    /** Enrich the mobs the interpreter guesses from their habitat, dimension, behaviour and drops. Hand-written mobs are never touched. */
     boolean mobEnrichment = true;
     /** Give crafted and interpreted items the key aspects their hand-written family members share (candles -> lux). */
     boolean familyConsistency = true;

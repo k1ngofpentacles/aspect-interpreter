@@ -162,7 +162,8 @@ final class FamilyLayer {
         presence.entrySet().stream()
                 .filter(e -> e.getValue() >= KEY_PRESENCE * anchors.size())
                 .sorted(Comparator.<Map.Entry<String, Integer>>comparingInt(Map.Entry::getValue).reversed()
-                        .thenComparing(e -> -median(shares.get(e.getKey()))))
+                        .thenComparing(e -> -median(shares.get(e.getKey())))
+                        .thenComparing(Map.Entry::getKey))
                 .limit(2)
                 .forEach(e -> out.add(new Key(e.getKey(), median(shares.get(e.getKey())))));
         return out;

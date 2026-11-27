@@ -15,7 +15,9 @@ public abstract class EntityAspectsMixin {
     @Inject(method = "of(Lnet/minecraft/world/entity/EntityType;)Lcom/leclowndu93150/thaumaturge/api/aspect/AspectList;",
             at = @At("RETURN"), cancellable = true)
     private static void aspectInterpreter$fallback(EntityType<?> type, CallbackInfoReturnable<AspectList> cir) {
-        // The table holds a guess for unassigned types, or the real entry plus additions; real entries are never reduced.
+        // The table holds guesses for unassigned types only. A hand-written entry (a non-empty result) is never replaced or added to.
+        AspectList original = cir.getReturnValue();
+        if (original != null && !original.isEmpty()) return;
         AspectList fromTable = EntityInterpreter.guess(type);
         if (fromTable != null && !fromTable.isEmpty()) cir.setReturnValue(fromTable);
     }

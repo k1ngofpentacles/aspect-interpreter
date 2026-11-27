@@ -4,7 +4,7 @@ import com.leclowndu93150.thaumaturge.api.aspect.AspectList;
 import com.leclowndu93150.thaumaturge.api.aspect.IAspectIndex;
 import com.leclowndu93150.thaumaturge.content.aspect.CraftingAspectContributor;
 import dev.movingcastle.aspectinterpreter.Additions;
-import dev.movingcastle.aspectinterpreter.CleanPass;
+import dev.movingcastle.aspectinterpreter.Overlay;
 import dev.movingcastle.aspectinterpreter.CraftComplexity;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.world.item.Item;
@@ -19,7 +19,8 @@ import java.util.Optional;
 /**
  * Thaumaturge's crafting rule conserves material only. After it has derived an item from a recipe, add
  * craftsmanship for the extra steps that went into it, but only for items of non-canon mods made at the
- * crafting table (see {@link Additions}). Hand-written items never reach this method.
+ * crafting table (see {@link Additions}). Hand-written items never reach this method. Acts only while this mod computes
+ * its overlay, never in Thaumaturge's own index build.
  */
 @Mixin(value = CraftingAspectContributor.class, remap = false)
 public abstract class CraftingAspectContributorMixin {
@@ -27,7 +28,7 @@ public abstract class CraftingAspectContributorMixin {
             at = @At("RETURN"), cancellable = true, require = 0) // optional: if Thaumaturge changes, only this layer turns off
     private void aspectInterpreter$craftsmanship(Item item, RecipeManager recipes, HolderLookup.Provider registries, IAspectIndex index,
                                                   CallbackInfoReturnable<Optional<AspectList>> cir) {
-        if (CleanPass.active()) return; // the clean pass must see Thaumaturge's own result
+        if (!Overlay.building()) return; // Thaumaturge's own index build must produce Thaumaturge's own values only
         Optional<AspectList> result = cir.getReturnValue();
         if (result == null || result.isEmpty()) return;
         try {

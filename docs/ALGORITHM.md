@@ -1,8 +1,10 @@
 # Aspect Interpreter: how it assigns aspects
 
-Aspect Interpreter is a NeoForge 1.21.1 add-on for Thaumaturge 1.1+. It gives aspects to any item or entity type that has none, and enriches mobs, which are the richest source of aspects and the place where habitat and dimension flavour belong. Nothing is ever removed or reduced.
+Aspect Interpreter is a NeoForge 1.21.1 add-on for Thaumaturge 1.1+. It gives aspects to any item or entity type that has none, and enriches the mobs it guesses, which are the richest source of aspects and the place where habitat and dimension flavour belong. Anything with a hand-written aspect (an item's `base_aspects` entry, a mob's `entity_aspects` entry, from any mod and Thaumaturge itself) is never guessed, added to, enriched, clamped or reduced (`HandWritten` is the one test every layer asks).
 
-Additions are balanced along three axes: how rare an aspect is, how scarce the resource is, and how much processing it takes. Hand-written item entries are never added to. Hand-written mob entries receive mob enrichment as additions only. Crafted items gain the key aspects their hand-written family members share (family consistency). Crafted items of non-canon mods made at the crafting table also get craftsmanship. Nothing else in the original index changes.
+Additions are balanced along three axes: how rare an aspect is, how scarce the resource is, and how much processing it takes. Crafted items gain the key aspects their hand-written family members share (family consistency). Crafted items of non-canon mods made at the crafting table also get craftsmanship. A guessed mob is held to the hand-written mobs of its threat tier (see Threat tiers). Thaumaturge's own index is never changed: everything above is an overlay.
+
+**Clean slate (1.11.0).** All of it is computed from scratch at every launch and every data reload, from Thaumaturge's own index of that launch plus the data maps. Nothing is saved or read back between launches except the readable record `config/aspect_interpreter/assignments.json`, and Thaumaturge's index cache file is never touched. Same pack, same result: every map the model, tables and rankings use is sorted, and ties are broken by id.
 
 The reasoning behind each rule, drawn from Thaumaturge's own data, is in [`PHILOSOPHY.md`](PHILOSOPHY.md).
 
@@ -10,11 +12,12 @@ The reasoning behind each rule, drawn from Thaumaturge's own data, is in [`PHILO
 
 | Target | Hook | What it changes |
 |---|---|---|
-| Recipe-derived items | Mixin on the return of Thaumaturge's `CraftingAspectContributor.derive` | Adds family key aspects to any crafted item, and craftsmanship to items of non-canon mods made at the crafting table. Optional: it turns itself off if Thaumaturge changes. |
-| Items | `IAspectRecipeContributor` registered through `RegisterAspectContributorsEvent` | Thaumaturge asks contributors in order and keeps the first non-empty answer. Event contributors run after its own crucible, infusion, crafting and cooking contributors, so this one is only asked about items with no base aspects and no recipe Thaumaturge could resolve. |
-| Entities | Mixin on the return of `EntityAspects.of(EntityType)` | Every entity read (scanning, goggles, wand charging, nodes, liquid death, infusion enchantments) goes through this method. It returns a guess for unassigned types, or the real entry plus mob enrichment. |
+| Serving items | Mixin (required) on the return of `AspectIndex.of(Item)` and `AspectIndex.of(ItemStack)` | Every item lookup in Thaumaturge (tooltips, scanning, crucible, deconstruction table, JEI, wands) is `AspectIndexAccess.index().of(...)`. These two methods return the overlay's value for an item in it, and Thaumaturge's own value otherwise. A variant (the wand) or an essentia container's own contents still win. |
+| Overlay build | Thaumaturge's own `AspectIndexBuilder.build`, run once more per launch with this mod on | See below. Recipe-derived items: optional mixin on the return of `CraftingAspectContributor.derive` adds family key aspects and craftsmanship; unresolved items: an `IAspectRecipeContributor` registered through `RegisterAspectContributorsEvent`, asked only about items Thaumaturge's own contributors could not resolve. Both act only during this build, never in Thaumaturge's own. |
+| Clients | Payload `item_overlay` (and `entity_table`), server to client | A client has Thaumaturge's index from Thaumaturge and our overlay on top. Cleared when the client leaves a world. |
+| Entities | Mixin on the return of `EntityAspects.of(EntityType)` | Every entity read (scanning, goggles, wand charging, nodes, liquid death, infusion enchantments) goes through this method. It returns the guess for an unassigned type; a hand-written (non-empty) result is returned as is. |
 
-Thaumaturge resolves recipes recursively. So when the interpreter fills in a leaf item, Thaumaturge's own recipe logic can then finish every item crafted from it.
+**The overlay.** Thaumaturge builds or loads its index with this mod off. When it is ready (checked at the end of each server tick until it is), the interpreter trains the model on it, computes canon, dimension context, families, crafting depth and the entity table, then runs `AspectIndexBuilder.build` a second time with the interpreter's contributor and crafting mixin on. Thaumaturge resolves recipes recursively, so a leaf we fill in carries into everything crafted from it. Every item whose value in that second index differs from the real index, and is not hand-written, is the overlay. That also covers the products of guessed items without re-deriving anything by hand.
 
 ## What existing assignments show (observed in a 6,920-item resolved index)
 
@@ -41,7 +44,7 @@ A separate list of neutral words (colours, shapes, sizes) is ignored for meaning
 
 | Source | What it does | Weight |
 |---|---|---|
-| Neighbours | The 5 most similar assigned IDs, scored by weighted word overlap (weight = word rarity × word consistency, so materials outweigh shapes). A neighbour of another kind (food, gear, or anything else; blocks and plain items count as one kind) counts at half similarity, so `raw_bison` doesn't learn from `raw_iron`. They also supply the amount. | 1.5 × best similarity |
+| Neighbours | The 5 most similar assigned IDs, scored by weighted word overlap (weight = word rarity × word consistency, so materials outweigh shapes). A neighbour of another kind (food, gear, or anything else; blocks and plain items count as one kind) counts at half similarity, so `raw_bison` doesn't learn from `raw_iron`. They also supply the amount. A neighbour whose values Thaumaturge derived from recipes (not hand-written) votes and sizes at 0.15 of a hand-written one. | 1.5 × best similarity |
 | Word profiles | The average aspect mix of all assigned IDs containing each word, discounted for rare or inconsistent words | 0.6 |
 | Meaning | Lexicon matches, longest phrase first (`dark_oak` consumes `dark`). Each keyword is calibrated against how often its aspect actually appears on assigned items containing it. | 0.5, scaled up when no close neighbour exists |
 | Recipes (items) | Any recipe type producing the item whose ingredients resolve (≥50%), at 75% of the inputs. | 2.0 × fraction resolved |
@@ -58,7 +61,7 @@ A separate list of neutral words (colours, shapes, sizes) is ignored for meaning
 
 **6. Check the aspects exist.** Aspects the running pack doesn't define (for example, an addon aspect seen in a data map of a mod that is not loaded) are dropped, and the rest are rescaled.
 
-**7. Additions.** An item guess then receives the item layers below. An entity guess goes through mob enrichment.
+**7. Additions.** An item guess then receives the item layers below. An entity guess goes through mob enrichment and then its threat tier's ceilings.
 
 ## Additive layers
 
@@ -66,7 +69,7 @@ Nothing is ever removed or reduced.
 
 | Layer | Applies to | Adds |
 |---|---|---|
-| Mob enrichment | every mob, hand-written or guessed | habitat, dimension, behaviour and drop aspects (see below) |
+| Mob enrichment | guessed mobs only (never hand-written ones) | habitat, dimension, behaviour and drop aspects (see below) |
 | Family consistency | crafted and interpreted items of any mod (never hand-written ones) | up to 2 key aspects that the item's hand-written relatives share; lux for bright light sources (see below) |
 | Craftsmanship | items of non-canon mods made at the crafting table, derived or guessed | ordo or fabrico for crafting steps beyond the first refinement |
 | Function | interpreted items only | one missing function aspect named by the head of the name (container → vacuos, lamp → lux...), checked against hand-written items |
@@ -99,7 +102,7 @@ Hand-written aspects are canon: the interpreter learns from them but never adds 
 
 ## Mob enrichment
 
-Mobs should be the most aspect-rich source, and the hardest to process. So variety, and dimension flavour, belong on them. Every mob, with a hand-written entry or a guess, is enriched from four sources:
+Mobs should be the most aspect-rich source, and the hardest to process. So variety, and dimension flavour, belong on them. Every mob the interpreter guesses (since 1.11.0 never one with a hand-written entry) is enriched from four sources:
 
 | Source | Reads | Weight |
 |---|---|---|
@@ -123,11 +126,23 @@ So a ghast takes infernum and spiritus, a zombified piglin infernum and mortuus,
 
 **Counts.** Candidates scoring at least 0.2 are added up to a ceiling; weaker candidates (at least 0.08) only fill up to a floor. Ordinary mobs: 3–4 aspects. Fantasy and other-dimension mobs: 4–5. Bosses (the `c:bosses` tag, or 150+ health): 6–7.
 
-**Rarity.** Bosses ×2, structure-only spawns ×1.5, rare spawns (spawn weight ≤ 5 or 2 biomes or fewer) ×1.3, others ×1. For hand-written mobs this scales only the additions; the original amounts stay exactly as written. For guessed mobs it scales the whole total.
+**Rarity.** Bosses ×2, structure-only spawns ×1.5, rare spawns (spawn weight ≤ 5 or 2 biomes or fewer) ×1.3, others ×1. It scales the guessed mob's whole total.
 
-**Amounts and balance.** Each addition is the aspect's minor share × the mob's total × rarity, scaled by how well supported it is. The additions together are capped at 30–45% of that (by fantasy score), or 40% for bosses. The weakest are dropped first; dimension guarantees are kept.
+**Amounts and balance.** Each addition is the aspect's minor share × the mob's total, scaled by how well supported it is. The additions together are capped at 30–45% of that (by fantasy score), or 40% for bosses. The weakest are dropped first; dimension guarantees are kept. The record lists every guessed mob's fantasy score, rarity and each addition with its source.
 
-On vanilla's 87 hand-written mobs this takes the mean from 2.9 to 3.7 aspects and the mean total from 27 to 31. The report lists every mob's fantasy score, rarity and each addition with its source.
+## Threat tiers (1.11.0)
+
+A guessed mob never carries more than the hand-written mobs of the same threat, so the interpreter cannot make a mob richer than its kind. The tier comes from stats alone, by fixed thresholds read off the hand-written mobs' stats of the test pack (142 mobs):
+
+| Tier | Rule (first match, from the top) |
+|---|---|
+| Boss | `c:bosses` tag, or max health 150 or more |
+| Mini-boss | attack damage 12 or more, or hostile (monster category) with max health 60 or more |
+| Strong hostile | hostile with max health 30 or more, or attack damage 5 or more |
+| Weak hostile | any other hostile mob |
+| Passive / ambient | everything else (animals, water and ambient creatures, and every non-living entity: boats, orbs, projectiles) |
+
+Ceilings are computed at every launch from the running pack's hand-written mobs, never saved: **total** at most the largest hand-written total in the tier, or the next largest when the largest is more than twice it (an outlier; the same rule for each aspect below); **each aspect** at most the tier's largest hand-written amount of that aspect (outlier rule applied), and for an aspect no hand-written mob of the tier carries, at most the tier's largest single-aspect amount; a tier with no hand-written mobs takes the next lower tier's ceilings. The clamp runs after enrichment: each aspect is cut to its ceiling, then all amounts are scaled down together (each at least 1) until the total fits, and the weakest aspects are dropped only if that is not enough. Ties break by aspect id.
 
 ## Function layer
 
@@ -164,8 +179,7 @@ The shape words and percentages are editable in `lexicon.json` under `craftsmans
 Nothing from other mods is bundled with the mod. It learns entirely from the player's own installation:
 
 - **Live data maps:** the `base_aspects` and `entity_aspects` entries of every installed mod and datapack.
-- **Thaumaturge's own derived values (the clean pass, 1.10.0):** at the start of each index build (our `beginBuild`) the interpreter calls Thaumaturge's `AspectIndexBuilder.build` once more with a `CleanPass.active()` flag set. While it is set, our contributor adds nothing and our crafting mixin passes Thaumaturge's result through, so the result is exactly what Thaumaturge derives alone, for every recipe type it reads (crafting, smithing, stonecutting, cooking, crucible, infusion). The model trains on that result plus the data maps, in the same launch. Thaumaturge's cache file is never read for learning, because it holds this mod's guesses and everything derived from them.
-- **Without a build:** when Thaumaturge's cache is valid no build runs. The clean values are then reloaded from `config/aspect_interpreter/clean_training.json`, which is stamped with the `fingerprint` in the header of `aspect_index.json` and used only while the two match. If they don't (the file was deleted or is from another index), the cache is moved aside at server start so Thaumaturge rebuilds and the clean pass runs: there is no degraded mode. After a build, the entity, dimension-context and mob tables made at startup are redone from the clean model (about 90 ms) and the new entity table is sent to connected players.
+- **Thaumaturge's own index of this launch (1.11.0):** Thaumaturge builds or loads its index with this mod switched off (our contributor and crafting mixin act only in our own overlay build), so the index is exactly what Thaumaturge derives alone, for every recipe type it reads. The model trains on it plus the data maps, from scratch at every launch and reload. Nothing is saved: 1.10.0's clean pass, `clean_training.json` and the fingerprint matching are gone. If an old cache file still holds an earlier version's guesses (1.10.0 and older wrote them into it), those would be learned as if Thaumaturge's own; the changelog asks players to delete `config/thaumaturge/aspect_index.json` once on upgrade, and the pack test fails if the live index differs from a fresh Thaumaturge-only build.
 
 The model is recalibrated at every reload, so it adapts to each pack's own conventions. Set `learnFromThaumaturgeCache: false` to use data maps only.
 
@@ -176,22 +190,21 @@ The test, run during development on the author's 10,595-item pack, hides 20% of 
 - **In-pack:** the top aspect matches 72.6% of the time, with 98.7% coverage. Overlap with the true aspect set is 0.71, and 42% of guesses carry a single aspect (truth: 41%).
 - **Unfamiliar pack** (trained on vanilla only, predicting modded items): about 58% top-aspect match.
 - **Items covered only by the meaning lexicon:** about 18% top-aspect match, against about 2% by chance. These guesses carry low confidence scores.
+- **Hold-out on hand-written items (1.11.0, `HoldOutEvaluationTest`):** five folds, each hiding a random 10% of the test pack's 1,448 hand-written items (fixed seeds), predicted from names alone. Trained on the 1.9.0 learning set (Thaumaturge's cache minus the interpreter's items, 2,096 items): aspect-set precision 0.73, recall 0.77, top aspect 0.72, predicted/true total median 1.00 and p90 2.11, 96% predicted. Trained on the 1.10.0 clean set (3,797 items, the same set 1.11.0 now learns from): precision 0.69, recall 0.76, top aspect 0.68, median 1.00, p90 2.86, 98% predicted. The larger clean set holds many more derived items, which pull names toward their ingredients' aspects; it is the honest set (no guesses learned second-hand), not the more accurate one.
 
 ## Config: `config/aspect_interpreter.json`
 
 `items`, `entities`, `learnFromThaumaturgeCache`, `mobEnrichment`, `familyConsistency`, `canonNamespaces`, `functionLayer`, `craftingComplexity`, `dimensionContext`, `baselineDimensions`, `dimensionAspects`, `minConfidence`, `writeReport`, `excludedNamespaces`, `excludedIds`, `excludedWords`.
 
-After each reload, every guess, and every addition with the layer that made it, is written to `config/aspect_interpreter/assignments.txt`. To override a guess, give the object a real `base_aspects` or `entity_aspects` entry; real entries always win.
+After each computation, every value we serve (items and mobs), with its confidence, evidence and the layer behind each addition, is written to `config/aspect_interpreter/assignments.json` (sorted, no times: the same pack gives the same bytes). To override a guess, give the object a real `base_aspects` or `entity_aspects` entry; real entries always win.
 
 ## Runtime cost
 
-All of the work happens once, inside Thaumaturge's own index build, and Thaumaturge caches the result to `config/thaumaturge/aspect_index.json`. Later launches load that cache and cost nothing.
+All of the work happens once per launch (and once per data reload), after Thaumaturge's own index is ready, on the server thread, in one end-of-tick step. Thaumaturge's own index and cache file are as without this mod. In the test pack (about 5,200 items, 3,800 valued) the whole step takes about half a second: the model, canon, dimension context, families, the threat tiers and the mob table, one more Thaumaturge derivation with this mod on, the diff, and the record.
 
-- **Learning:** about 50–150 ms each time data maps load.
-- **Canon and dimension context:** computed once per server start or reload, before the index build. They read each pack's aspect files, each dimension's biomes and features, and every mob's loot table once; the time is logged.
-- **Mob enrichment:** part of the entity warm-up, once per start or reload.
+- **Learning:** about 50-150 ms.
+- **Canon and dimension context:** they read each pack's aspect files, each dimension's biomes and features, and every mob's loot table once; the time is logged.
 - **Item guesses:** about 0.2 ms each. Each item's guess is reused across Thaumaturge's two resolution passes.
 - **Recipe evaluation:** capped at 4 recipes per item and 2 options per ingredient.
-- **Entities:** every entity type is pre-guessed once on the server at startup and after reloads. The finished table is sent to each player when they join (a few kilobytes), so clients never compute guesses and always agree with the server. The per-frame lookup from Thaumaturge's goggles overlay is a pure table read.
-- **First install:** Thaumaturge's cache doesn't know about this mod. Whenever the mod's version or config changes, the old cache is moved aside to `aspect_index.before_interpreter.json`, so Thaumaturge rebuilds once with interpreted aspects included. That one launch also learns from the clean pass; no second launch is needed. The clean pass costs about 0.2 s in a pack of 5,000 valued items (it is Thaumaturge's own derivation run once more).
-- **Logging:** the log reports how many items were filled and how many milliseconds the interpreter added to the build. The report is written after the build finishes.
+- **Entities:** every unassigned entity type is guessed once on the server per launch and reload. The finished table and the item overlay are sent to each player when they join (a few kilobytes and some tens of kilobytes), so clients never compute guesses and always agree with the server. The per-frame lookup from Thaumaturge's goggles overlay is a pure table read; item lookups add one hash lookup.
+- **Logging:** one line reports the overlay size, additions per layer and milliseconds.

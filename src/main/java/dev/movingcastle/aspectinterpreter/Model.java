@@ -33,7 +33,8 @@ final class Model {
 
     private final Map<String, Map<String, Double>> train;
     private final Lexicon lex;
-    private final Map<String, Set<String>> inverted = new HashMap<>();
+    // Sorted everywhere a sum or a tie-break could depend on iteration order: a result must not depend on hash or insertion order.
+    private final Map<String, Set<String>> inverted = new TreeMap<>();
     private final Map<String, Double> idf = new HashMap<>();
     private final Map<String, Profile> profiles = new HashMap<>();
     private final Map<String, Set<String>> tokenSets = new HashMap<>();
@@ -50,27 +51,37 @@ final class Model {
         return kind.equals("food") || kind.equals("gear") ? kind : "other";
     }
 
+    /** Weight of a recipe-derived neighbour against a hand-written one (1.0) in neighbour voting and the size median. */
+    static final double DERIVED_WEIGHT = 0.15;
+    /** Ids with hand-written values; every other training object counts {@link #DERIVED_WEIGHT}. Null = all count 1. */
+    private Set<String> handWritten = null;
+
+    Model withHandWritten(Set<String> hand) { this.handWritten = new TreeSet<>(hand); return this; }
+    private double weightOf(String id) { return handWritten == null || handWritten.contains(id) ? 1.0 : DERIVED_WEIGHT; }
+
     Model withKinds(Map<String, String> kinds) { this.kinds = kinds; return this; }
     Model withMaxTotal(double max) { if (max > 0) this.maxTotal = max; return this; }
     double maxTotal() { return maxTotal; }
     /** Fraction of training objects carrying each aspect: the original layer's scarcity. */
-    final Map<String, Double> prevalence = new HashMap<>();
+    final Map<String, Double> prevalence = new TreeMap<>();
 
-    Model(Map<String, Map<String, Double>> train, Lexicon lex) {
-        this.train = train;
+    Model(Map<String, Map<String, Double>> trainIn, Lexicon lex) {
+        Map<String, Map<String, Double>> sorted = new TreeMap<>();
+        trainIn.forEach((id, v) -> sorted.put(id, new TreeMap<>(v)));
+        this.train = sorted;
         this.lex = lex;
-        Map<String, Map<String, Double>> sums = new HashMap<>();
-        Map<String, List<Double>> totals = new HashMap<>();
+        Map<String, Map<String, Double>> sums = new TreeMap<>();
+        Map<String, List<Double>> totals = new TreeMap<>();
         for (Map.Entry<String, Map<String, Double>> e : train.entrySet()) {
             Set<String> toks = new LinkedHashSet<>(Tokens.of(e.getKey()));
             tokenSets.put(e.getKey(), toks);
             double tot = total(e.getValue());
             if (tot <= 0) continue;
             for (String t : toks) {
-                Map<String, Double> s = sums.computeIfAbsent(t, k -> new HashMap<>());
+                Map<String, Double> s = sums.computeIfAbsent(t, k -> new TreeMap<>());
                 e.getValue().forEach((a, x) -> s.merge(a, x / tot, Double::sum));
                 totals.computeIfAbsent(t, k -> new ArrayList<>()).add(tot);
-                inverted.computeIfAbsent(t, k -> new HashSet<>()).add(e.getKey());
+                inverted.computeIfAbsent(t, k -> new TreeSet<>()).add(e.getKey());
             }
         }
         int n = train.size();
@@ -79,7 +90,7 @@ final class Model {
         sums.forEach((t, s) -> {
             List<Double> tl = totals.get(t);
             int cnt = tl.size();
-            Map<String, Double> dist = new HashMap<>();
+            Map<String, Double> dist = new TreeMap<>();
             s.forEach((a, x) -> dist.put(a, x / cnt));
             double h = 0;
             for (double p : dist.values()) if (p > 0) h -= p * Math.log(p);
@@ -116,7 +127,7 @@ final class Model {
         String ns = Tokens.namespace(id);
 
         // 1. neighbours
-        Map<String, Double> cand = new HashMap<>();
+        Map<String, Double> cand = new TreeMap<>();
         for (String t : T) {
             Set<String> r = inverted.get(t);
             if (r == null || r.size() >= 4000) continue;
@@ -130,7 +141,7 @@ final class Model {
         for (int i = 0; i < Math.min(300, pre.size()); i++) {
             String r = pre.get(i).getKey();
             if (r.equals(id)) continue;
-            Set<String> uni = new HashSet<>(T);
+            Set<String> uni = new TreeSet<>(T);
             uni.addAll(tokenSets.get(r));
             double u = 0;
             for (String t : uni) u += idf.getOrDefault(t, 3.0) * info(t);
@@ -141,24 +152,25 @@ final class Model {
             ids.add(r);
         }
         sims.sort((a, b) -> Double.compare(b[0], a[0]));
-        Map<String, Double> knn = new HashMap<>();
+        Map<String, Double> knn = new TreeMap<>();
         List<double[]> kTotals = new ArrayList<>(); // {total, similarity}
         double ks = 0, best = 0, kc = 0;
         for (int i = 0; i < Math.min(K, sims.size()); i++) {
             double sim = sims.get(i)[0];
             if (sim < SIM_MIN) break;
             if (i == 0) best = sim;
-            Map<String, Double> v = train.get(ids.get((int) sims.get(i)[1]));
+            String nid = ids.get((int) sims.get(i)[1]);
+            Map<String, Double> v = train.get(nid);
             double tot = total(v);
-            double fs = sim;
+            double fs = sim * weightOf(nid);
             v.forEach((a, x) -> knn.merge(a, fs * x / tot, Double::sum));
-            kTotals.add(new double[]{tot, sim});
-            kc += sim * v.size();
-            ks += sim;
+            kTotals.add(new double[]{tot, fs});
+            kc += fs * v.size();
+            ks += fs;
         }
 
         // 2. learned word profiles
-        Map<String, Double> tok = new HashMap<>();
+        Map<String, Double> tok = new TreeMap<>();
         double tt = 0, tsum = 0;
         for (String t : T) {
             Profile p = profiles.get(t);
@@ -170,7 +182,7 @@ final class Model {
         }
 
         // 3. meaning
-        Map<String, Double> lx = new HashMap<>();
+        Map<String, Double> lx = new TreeMap<>();
         int hits = 0;
         for (Lexicon.Match m : lex.matches(tokens)) {
             int len = 1 + (int) m.gram().chars().filter(ch -> ch == '_').count();
@@ -187,7 +199,7 @@ final class Model {
         double W = 0;
         for (Source s : sources) if (!s.dist().isEmpty()) W += s.weight();
         if (W <= 0) return null;
-        Map<String, Double> dist = new HashMap<>();
+        Map<String, Double> dist = new TreeMap<>();
         String basis = null;
         double basisW = 0;
         for (Source s : sources) {
@@ -237,25 +249,25 @@ final class Model {
         return s.isEmpty() ? 0 : s.get(s.size() - 1)[0];
     }
 
+    /** Sum in key order, so the same entries always give the same bits whatever the map's own iteration order. */
     static double total(Map<String, Double> v) {
         double t = 0;
-        for (double x : v.values()) t += x;
+        for (double x : (v instanceof SortedMap ? v : new TreeMap<>(v)).values()) t += x;
         return t;
     }
 
     static Map<String, Double> normalise(Map<String, Double> d) {
-        double z = 0;
-        for (double x : d.values()) z += x;
+        double z = total(d);
         if (z <= 0) return Map.of();
-        Map<String, Double> o = new HashMap<>();
+        Map<String, Double> o = new TreeMap<>();
         for (Map.Entry<String, Double> e : d.entrySet()) o.put(e.getKey(), e.getValue() / z);
         return o;
     }
 
     private static Map<String, Double> top(Map<String, Double> d, int n) {
-        List<Map.Entry<String, Double>> l = new ArrayList<>(d.entrySet());
+        List<Map.Entry<String, Double>> l = new ArrayList<>(new TreeMap<>(d).entrySet());
         l.sort((a, b) -> Double.compare(b.getValue(), a.getValue()));
-        Map<String, Double> o = new HashMap<>();
+        Map<String, Double> o = new TreeMap<>();
         for (int i = 0; i < Math.min(n, l.size()); i++) o.put(l.get(i).getKey(), l.get(i).getValue());
         return o;
     }

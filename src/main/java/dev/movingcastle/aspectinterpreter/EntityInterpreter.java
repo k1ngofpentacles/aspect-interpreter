@@ -69,25 +69,25 @@ public final class EntityInterpreter {
     /** Fills the guess table for every entity type without real aspects. Blocking; call off the render thread. */
     static void warmUp() {
         if (!Config.get().entities) return;
-        Knowledge.rebuildIfStale();
         learnCategories();
         Additions.clearEntities();
+        AssignmentLog.clearEntities();
         MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
         MobEnrichment.prepare(server == null ? null : server.registryAccess());
+        MobTiers.prepare();
         Map<EntityType<?>, Map<String, Double>> fresh = new HashMap<>();
         for (EntityType<?> type : BuiltInRegistries.ENTITY_TYPE) {
+            // a hand-written mob gets nothing from us: no guess, no enrichment, no clamp (Thaumaturge's own value stands)
+            if (HandWritten.entity(type)) continue;
             String id = EntityType.getKey(type).toString();
-            AspectList real = type.builtInRegistryHolder().getData(AspectDataMaps.ENTITY_ASPECTS);
-            boolean isReal = real != null && !real.isEmpty();
             Map<String, Integer> base = new LinkedHashMap<>();
-            if (isReal) Knowledge.toMap(real).forEach((a, x) -> base.put(a, (int) Math.round(x)));
-            else compute(type).forEach((a, x) -> base.put(a, (int) Math.round(x)));
+            compute(type).forEach((a, x) -> base.put(a, (int) Math.round(x)));
             if (base.isEmpty()) continue;
-            // hand-written entries keep every aspect and amount; enrichment only adds
-            Map<String, Integer> enriched = MobEnrichment.enrich(type, id, base, isReal);
-            if (enriched == null && isReal) continue; // unchanged real entry: Thaumaturge's own value stands
+            Map<String, Integer> enriched = MobEnrichment.enrich(type, id, base);
+            // never above the hand-written mobs of the same threat tier, in total or per aspect
+            Map<String, Integer> fin = MobTiers.applyTo(type, id, enriched != null ? enriched : base);
             Map<String, Double> d = new LinkedHashMap<>();
-            (enriched != null ? enriched : base).forEach((a, x) -> d.put(a, (double) x));
+            fin.forEach((a, x) -> d.put(a, (double) x));
             fresh.put(type, d);
         }
         AspectInterpreter.LOG.info("Aspect Interpreter mobs: {}", Additions.entitySummary());
@@ -115,7 +115,7 @@ public final class EntityInterpreter {
         Map<MobCategory, Map<String, Double>> out = new EnumMap<>(MobCategory.class);
         sums.forEach((cat, sum) -> {
             int n = counts.get(cat);
-            List<Map.Entry<String, Double>> top = new ArrayList<>(sum.entrySet());
+            List<Map.Entry<String, Double>> top = new ArrayList<>(new TreeMap<>(sum).entrySet());
             top.sort((a, b) -> Double.compare(b.getValue(), a.getValue()));
             Map<String, Double> learned = new HashMap<>();
             // keep only what most members share (a category of zombies and spiders shares little)
@@ -169,6 +169,8 @@ public final class EntityInterpreter {
         Map<String, Double> g = GUESSES.get(type);
         return g != null ? g : compute(type);
     }
+
+    static boolean isReady() { return ready; }
 
     static void invalidate() {
         ready = false;

@@ -163,7 +163,9 @@ An aspect source is balanced along three axes: how rare its aspects are, how sca
 
 **Thaumaturge's biome aspects are a palette, not a habitat.** Its biome map gives aura nodes a primal mix (cold biomes ordo, plains aer, swamps perditio). Read as habitat it would make a polar bear orderly. So a landscape reading from biome tags leads, and the palette counts at half weight where the landscape is silent.
 
-**Vanilla preview** (Thaumaturge's 87 vanilla mob entries, vanilla spawn and loot data):
+**Superseded in 1.11.0:** this section described adding to hand-written mobs. That was reversed: a mob with a hand-written entry gets nothing from the interpreter (section 11); the enrichment below applies to mobs the interpreter guesses, and the table is kept only as a record of what 1.6.0 measured on vanilla's data.
+
+**Vanilla preview as measured in 1.6.0** (Thaumaturge's 87 vanilla mob entries, vanilla spawn and loot data):
 
 | Mob | Hand-written | Added |
 |---|---|---|
@@ -200,8 +202,18 @@ Thaumaturge's recipe rule carries an ingredient's aspects into everything made f
 
 Three rules follow:
 
-- **Train only on authored data, or data derived only from it.** 1.9.0 excluded everything downstream of a guess by tracing ingredients, which missed any recipe type whose ingredients it could not see (Thaumaturge 1.1.1's smithing). 1.10.0 does not trace anything: it asks Thaumaturge to derive its values again with this mod switched off (the clean pass) and trains on that, in the same launch. Every recipe type Thaumaturge reads is covered, now and in future, and there is no reset or second launch.
+- **Train only on authored data, or data derived only from it.** 1.9.0 excluded everything downstream of a guess by tracing ingredients, which missed any recipe type whose ingredients it could not see (Thaumaturge 1.1.1's smithing). 1.10.0 did not trace anything: it asked Thaumaturge to derive its values again with this mod switched off (the clean pass). 1.11.0 needs no extra pass: Thaumaturge's own index is built with this mod off, so it is the clean copy (section 11). Every recipe type Thaumaturge reads is covered, now and in future, and there is no reset or second launch.
 - **No guess outweighs the authors.** A name-based guess is capped at the largest hand-written total in the running pack. It takes the weighted median of its neighbours' totals, so a single outlier can't set the size.
 - **Similar names are not similar things across kinds.** "raw" means ore on an item and meat on food. Neighbours of another kind (food, gear, other) count half.
 
 The same caution applies to dimensions. A dimension built from overworld biomes (Thaumaturge Tinker's Bedrock dimension is one flat beach) says nothing about the mobs of those biomes, so borrowed biomes are credited to the overworld.
+
+## 11. The authors own what they wrote, and the host owns its index (1.11.0)
+
+Three rules, each a decision of the pack's author rather than a technical convenience.
+
+- **A hand-written entry is final.** An item with a `base_aspects` entry or a mob with an `entity_aspects` entry, from any mod, is a statement by its author. 1.6.0 added to hand-written mobs (a ghast gained infernum and spiritus); that is reversed. The interpreter fills what has no author and enriches only what it filled. One test, `HandWritten`, decides, and every layer asks it.
+- **The host's index is the host's.** 1.10.0 and older wrote guesses into Thaumaturge's own index and cache file, which a player could not tell from Thaumaturge's values, and which the interpreter then had to work around (moving the cache aside, a clean pass, a fingerprint-matched copy of the training data). Now Thaumaturge builds its index alone; its index is the clean training data; our values are an overlay served at the one place every lookup passes. Nothing of ours is saved for the next launch, so nothing can go stale, drift or be learned second-hand.
+- **No guess outranks its kind.** Mobs the interpreter guesses are held to the hand-written mobs of the same threat tier, in total and per aspect (ALGORITHM, "Threat tiers"). The tier is read from stats (max health, attack damage, hostility, boss status), so a boat or an orb that borrows an item's values, or a projectile named like an item, cannot carry more than the hand-written passive mobs do. Thresholds are fixed numbers read off the hand-written mobs of the test pack; the ceilings are recomputed from the running pack each launch. A non-living entity with hand-written data (a painting, an end crystal) counts in the passive tier; so does an outlier such as `thaumicconcilium:material_peeler` (total 200), but a ceiling is the tier's highest hand-written value unless that is more than twice the next highest, in which case the next highest is used, so one outlier cannot set it (the passive total ceiling is 60, not 200). Recipe-derived items count 0.15 against hand-written ones as neighbours: the hand-written values are the authors' intent, the derived ones are arithmetic on it.
+
+**Determinism.** The same pack must give the same values on every launch. The values depend only on sorted data and explicit tie-breaks: biome holders and `Map.of` iterate in an order that changes from launch to launch, so nothing sums or ranks over them. `tools/aspect-interpreter-determinism.py` checks it.

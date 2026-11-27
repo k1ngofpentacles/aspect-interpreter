@@ -22,7 +22,7 @@ import java.util.*;
 
 /**
  * Mobs are the richest source of aspects, and the hardest to process: the place where variety, and dimension
- * flavour, belong. This pass enriches every mob, hand-written or guessed, from four sources:
+ * flavour, belong. This pass enriches every mob the interpreter guesses (never a hand-written one, since 1.11.0), from four sources:
  *
  * <ol>
  *   <li><b>Habitat</b>: the biomes the mob spawns in, weighted by spawn weight: their landscape (from biome tags,
@@ -39,7 +39,7 @@ import java.util.*;
  * aspects, other dimensions, undeath and boss status). A balance pass then keeps only supported candidates, up to
  * a count that scales with the mob (3-4 for ordinary mobs, 4-5 for fantasy and other-dimension mobs, 6-7 for
  * bosses), and caps the total added. Rarer mobs get larger additions: bosses x2, structure-only spawns x1.5, rare
- * spawns x1.3. Hand-written entries keep every aspect and amount they have.
+ * spawns x1.3. A guessed mob is finally held to its threat tier's hand-written ceiling ({@link MobTiers}).
  */
 final class MobEnrichment {
     private MobEnrichment() {}
@@ -212,12 +212,13 @@ final class MobEnrichment {
     private record Candidate(String aspect, double score, String source, boolean guaranteed) {}
 
     /**
-     * The mob's aspects with additions, or null if nothing is added. {@code base} is the hand-written entry
-     * ({@code real}) or the interpreter's guess (already scaled by rarity). Never changes an existing amount.
+     * The mob's aspects with additions, or null if nothing is added. {@code base} is the interpreter's guess (already
+     * scaled by rarity). Only ever called for mobs without a hand-written entry ({@link HandWritten#entity}); a
+     * hand-written mob is never enriched. Never changes an existing amount.
      */
-    static LinkedHashMap<String, Integer> enrich(EntityType<?> type, String id, Map<String, Integer> base, boolean real) {
+    static LinkedHashMap<String, Integer> enrich(EntityType<?> type, String id, Map<String, Integer> base) {
         Config cfg = Config.get();
-        if (!cfg.mobEnrichment || base.isEmpty() || type.getCategory() == MobCategory.MISC || cfg.excluded(id)) return null;
+        if (!cfg.mobEnrichment || base.isEmpty() || type.getCategory() == MobCategory.MISC || cfg.excluded(id) || HandWritten.entity(type)) return null;
         int total = 0;
         for (int x : base.values()) total += x;
         if (total <= 0) return null;
@@ -265,7 +266,7 @@ final class MobEnrichment {
         score.forEach((a, s) -> {
             if (!base.containsKey(a) && !guaranteed.contains(a) && available.contains(a)) ranked.add(new Candidate(a, s, source.get(a), false));
         });
-        ranked.sort((a, b) -> Double.compare(b.score(), a.score()));
+        ranked.sort(Comparator.comparingDouble(Candidate::score).reversed().thenComparing(Candidate::aspect));
         Set<Candidate> taken = new HashSet<>();
         for (Candidate c : ranked) {
             if (count >= max) break;
@@ -277,8 +278,8 @@ final class MobEnrichment {
         }
         if (chosen.isEmpty()) return null;
 
-        // amounts: sized like minor aspects of the original layer, scaled by rarity and support
-        double unit = real ? total * r : total;
+        // amounts: sized like minor aspects of the original layer, scaled by rarity (already in the guess) and support
+        double unit = total;
         Map<Candidate, Integer> amounts = new LinkedHashMap<>();
         for (Candidate c : chosen) {
             double factor = c.guaranteed() ? 0.6 + 0.4 * f : 0.6 + 0.4 * Math.min(1, c.score());
@@ -288,7 +289,7 @@ final class MobEnrichment {
         // balance pass: the additions together stay a minority of the mob
         double cap = (boss ? 0.4 : 0.3 + 0.15 * f) * unit;
         List<Candidate> byWeakest = new ArrayList<>(amounts.keySet());
-        byWeakest.sort(Comparator.comparingDouble(Candidate::score));
+        byWeakest.sort(Comparator.comparingDouble(Candidate::score).thenComparing(Candidate::aspect));
         for (Candidate c : byWeakest) {
             if (sum(amounts) <= cap) break;
             if (!c.guaranteed()) amounts.remove(c);
@@ -309,7 +310,7 @@ final class MobEnrichment {
         StringJoiner line = new StringJoiner("; ", String.format(Locale.ROOT, "fantasy %.2f, %s x%.1f%s | ",
                 f, rarityLabel(r), r, dim == null ? "" : ", native to " + dim), "");
         note.forEach((src, j) -> line.add(src + ": " + j));
-        Additions.entity(id, real, line.toString());
+        Additions.entity(id, line.toString());
         return out;
     }
 

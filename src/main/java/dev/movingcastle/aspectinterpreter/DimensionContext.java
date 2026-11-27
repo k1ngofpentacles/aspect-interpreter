@@ -195,7 +195,7 @@ final class DimensionContext {
                     for (MobSpawnSettings.SpawnerData sd : mobs.getMobs(c).unwrap()) {
                         String eid = EntityType.getKey(sd.type).toString();
                         bump(ents, eid, dim, 1);
-                        habs.computeIfAbsent(eid, k -> new HashMap<>()).merge(b, (double) Math.max(1, sd.getWeight().asInt()), Math::max);
+                        habs.computeIfAbsent(eid, k -> new TreeMap<>(BY_BIOME_ID)).merge(b, (double) Math.max(1, sd.getWeight().asInt()), Math::max);
                         biomeSpawners.add(eid);
                     }
                 if (lent) continue; // its features are the baseline's, not this dimension's
@@ -431,12 +431,16 @@ final class DimensionContext {
         if (rl != null && BuiltInRegistries.ITEM.containsKey(rl) && BuiltInRegistries.ITEM.get(rl) != Items.AIR) items.add(rl.toString());
     }
 
+    /** Biomes ordered by registry id: Holder objects hash by identity, which differs from launch to launch. */
+    private static final Comparator<Holder<Biome>> BY_BIOME_ID =
+            Comparator.comparing(h -> h.unwrapKey().map(k -> k.location().toString()).orElse(""));
+
     private static void bump(Map<String, Map<String, Double>> m, String id, String dim, double w) {
-        m.computeIfAbsent(id, k -> new HashMap<>()).merge(dim, w, Double::sum);
+        m.computeIfAbsent(id, k -> new TreeMap<>()).merge(dim, w, Double::sum);
     }
 
     private static Map<String, Map<String, Double>> normalise(Map<String, Map<String, Double>> m) {
-        Map<String, Map<String, Double>> out = new HashMap<>();
+        Map<String, Map<String, Double>> out = new TreeMap<>();
         m.forEach((id, d) -> out.put(id, Model.normalise(d)));
         return out;
     }
