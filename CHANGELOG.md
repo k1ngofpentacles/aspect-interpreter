@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.11.1
+- Fixed: a guessed mob naming an aspect from a mod that is not installed (for example Madman's Dreams' somnium) could be served above its threat tier's ceilings, because the missing aspect was dropped and the rest rescaled upward after the clamp. The missing aspect is now dropped before enrichment and the clamp. No change in packs where every aspect exists.
+
 ## 1.11.0
 - **Upgrading from 1.10.0 or older: delete `config/thaumaturge/aspect_index.json` once** (with the game closed). Older versions wrote their guesses into Thaumaturge's own index cache, and this version never touches that file, so Thaumaturge only rebuilds it without them if you remove it. A new install needs nothing.
 - **Thaumaturge's index is purely Thaumaturge's.** The interpreter no longer takes part in Thaumaturge's index build, and never moves, edits or forces a rebuild of its cache file. Our values are a separate overlay, computed from scratch at every launch (and every data reload), served on top of Thaumaturge's index at the one place every item lookup passes (`AspectIndex.of`, via one new required mixin, `AspectIndexMixin`), and sent to clients in a new payload so tooltips, scanning and crafting costs agree. The overlay holds our guesses for items Thaumaturge leaves empty, our additions, and the items crafted from those (found by running Thaumaturge's own derivation once more with the interpreter on and keeping every item whose value then differs). Entities keep the `EntityAspects.of` mixin.

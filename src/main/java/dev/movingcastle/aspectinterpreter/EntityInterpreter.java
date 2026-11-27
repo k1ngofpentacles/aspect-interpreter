@@ -217,10 +217,12 @@ public final class EntityInterpreter {
         double r = cat == MobCategory.MISC ? 1.0 : MobEnrichment.rarity(type, id);
         Map<String, Double> out = new LinkedHashMap<>();
         p.aspects().forEach((a, x) -> out.put(a, (double) Math.max(1, Math.round(x * r))));
+        // ALGORITHM step 6 on the guess, before enrichment and the tier clamp (1.11.1)
+        Map<String, Double> served = MissingAspects.dropMissing(out, MobEnrichment.available());
         Map<String, Integer> logged = new LinkedHashMap<>();
-        out.forEach((a, x) -> logged.put(a, (int) Math.round(x)));
+        served.forEach((a, x) -> logged.put(a, (int) Math.round(x)));
         AssignmentLog.entity(id, logged, p.confidence(), p.basis() + DimensionContext.describe(id, true));
-        return out;
+        return served;
     }
 
     private static HolderLookup.Provider provider() {

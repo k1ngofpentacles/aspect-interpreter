@@ -59,7 +59,7 @@ A separate list of neutral words (colours, shapes, sizes) is ignored for meaning
 
 **5. Score confidence.** Confidence = total evidence weight ÷ 2, capped at 1. Below `minConfidence` (default 0.15), the ID is left unassigned.
 
-**6. Check the aspects exist.** Aspects the running pack doesn't define (for example, an addon aspect seen in a data map of a mod that is not loaded) are dropped, and the rest are rescaled.
+**6. Check the aspects exist.** Aspects the running pack doesn't define (for example, an addon aspect seen in a data map of a mod that is not loaded) are dropped, and the rest are rescaled. For mobs this runs on the guess itself, before enrichment and the tier clamp (1.11.1), so the clamp's ceilings still hold when the mob is served.
 
 **7. Additions.** An item guess then receives the item layers below. An entity guess goes through mob enrichment and then its threat tier's ceilings.
 

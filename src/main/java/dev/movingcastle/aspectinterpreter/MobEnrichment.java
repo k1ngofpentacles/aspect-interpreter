@@ -50,6 +50,9 @@ final class MobEnrichment {
 
     private static volatile Set<String> available = Set.of();
 
+    /** The aspects this pack defines (empty before the first {@link #prepare}). */
+    static Set<String> available() { return available; }
+
     /** Once per warm-up: which aspects this pack defines. */
     static void prepare(HolderLookup.Provider registries) {
         Set<String> a = new HashSet<>();
